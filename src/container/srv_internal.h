@@ -96,7 +96,7 @@ struct oid_iv_range {
 
 /* Container IV structure */
 struct cont_iv_snapshot {
-	int snap_cnt;
+	uint64_t snap_cnt;
 	uint64_t snaps[0];
 };
 
@@ -126,12 +126,17 @@ struct cont_iv_prop {
 	struct daos_acl	cip_acl;
 };
 
+struct cont_iv_result {
+	uint64_t	size;
+};
+
 struct cont_iv_entry {
 	uuid_t	cont_uuid;
 	union {
 		struct cont_iv_snapshot iv_snap;
 		struct cont_iv_capa	iv_capa;
 		struct cont_iv_prop	iv_prop;
+		struct cont_iv_result	iv_result;
 	};
 };
 
@@ -142,6 +147,19 @@ struct cont_iv_key {
 	uuid_t		cont_uuid;
 	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
 	uint32_t	class_id;
+	/** 
+	 * During IV fetch, the server prepare the IV entry value
+	 * size by entry_size, when the IV fetch arrive the
+	 * leader, which find out the size is not enough, it will
+	 * reply REC2BIG, and also the required size by pool_iv_result,
+	 * and then the server will retry.
+	 */
+	uint32_t	entry_size;
+};
+
+struct cont_iv_output {
+	int64_t			iv_status; 
+	struct cont_iv_entry	iv_entry;
 };
 
 /*

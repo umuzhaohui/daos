@@ -174,6 +174,7 @@ rebuild_indexes(void **state)
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
+#define SNAP_CNT	20
 static void
 rebuild_snap_update_recs(void **state)
 {
@@ -183,7 +184,7 @@ rebuild_snap_update_recs(void **state)
 	daos_recx_t	recx;
 	int		tgt = DEFAULT_FAIL_TGT;
 	char		string[100] = { 0 };
-	daos_epoch_t	snap_epoch[5];
+	daos_epoch_t	snap_epoch[SNAP_CNT];
 	int		i;
 	int		rc;
 
@@ -194,7 +195,7 @@ rebuild_snap_update_recs(void **state)
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	for (i = 0; i < 5; i++)
+	for (i = 0; i < SNAP_CNT; i++)
 		sprintf(string + strlen(string), "old-snap%d", i);
 
 	recx.rx_idx = 0;
@@ -202,8 +203,8 @@ rebuild_snap_update_recs(void **state)
 	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, string,
 		     strlen(string) + 1, &req);
 
-	for (i = 0; i < 5; i++) {
-		char data[20] = { 0 };
+	for (i = 0; i < SNAP_CNT; i++) {
+		char data[100] = { 0 };
 
 		/* Update string for each snapshot */
 		daos_cont_create_snap(arg->coh, &snap_epoch[i], NULL, NULL);
@@ -216,7 +217,7 @@ rebuild_snap_update_recs(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		assert_true(rc == 0 || rc == -DER_NOSYS);
 	}
@@ -237,8 +238,8 @@ rebuild_snap_punch_recs(void **state)
 	struct ioreq	req;
 	daos_recx_t	recx;
 	int		tgt = DEFAULT_FAIL_TGT;
-	char		string[100];
-	daos_epoch_t	snap_epoch[5];
+	char		string[200];
+	daos_epoch_t	snap_epoch[SNAP_CNT];
 	int		i;
 	int		rc;
 
@@ -249,7 +250,7 @@ rebuild_snap_punch_recs(void **state)
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	for (i = 0; i < 5; i++)
+	for (i = 0; i < SNAP_CNT; i++)
 		sprintf(string + strlen(string), "old-snap%d", i);
 
 	recx.rx_idx = 0;
@@ -257,7 +258,7 @@ rebuild_snap_punch_recs(void **state)
 	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, string,
 		     strlen(string) + 1, &req);
 
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < SNAP_CNT; i++) {
 		/* punch string */
 		daos_cont_create_snap(arg->coh, &snap_epoch[i], NULL, NULL);
 		recx.rx_idx = i * 9; /* strlen("old-snap%d") */
@@ -267,7 +268,7 @@ rebuild_snap_punch_recs(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		assert_true(rc == 0 || rc == -DER_NOSYS);
 	}
@@ -287,7 +288,7 @@ rebuild_snap_update_keys(void **state)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	int		tgt = DEFAULT_FAIL_TGT;
-	daos_epoch_t	snap_epoch[5];
+	daos_epoch_t	snap_epoch[SNAP_CNT];
 	int		i;
 
 	if (!test_runable(arg, 4))
@@ -298,7 +299,7 @@ rebuild_snap_update_keys(void **state)
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	/* Insert dkey/akey by different snapshot */
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < SNAP_CNT; i++) {
 		char dkey[20] = { 0 };
 		char akey[20] = { 0 };
 
@@ -315,26 +316,26 @@ rebuild_snap_update_keys(void **state)
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
 		uint32_t	number;
-		daos_key_desc_t kds[10];
+		daos_key_desc_t kds[SNAP_CNT];
 		daos_anchor_t	anchor = { 0 };
 		char		buf[256];
 		int		buf_len = 256;
 		int		j;
 
 		daos_fail_value_set(i);
-		for (j = 0; j < 5; j++) {
+		for (j = 0; j < SNAP_CNT; j++) {
 			daos_handle_t	th_open;
 
 			memset(&anchor, 0, sizeof(anchor));
 			daos_tx_open_snap(arg->coh, snap_epoch[j], &th_open,
 					  NULL);
-			number = 10;
+			number = SNAP_CNT;
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
 				       buf_len, &req);
 
 			assert_int_equal(number, j > 0 ? j+1 : 0);
 
-			number = 10;
+			number = SNAP_CNT;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_akey(th_open, "dkey", &number, kds, &anchor,
 				       buf, buf_len, &req);
@@ -342,17 +343,17 @@ rebuild_snap_update_keys(void **state)
 			assert_int_equal(number, j);
 			daos_tx_close(th_open, NULL);
 		}
-		number = 10;
+		number = SNAP_CNT;
 		memset(&anchor, 0, sizeof(anchor));
 		enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
 			       buf_len, &req);
-		assert_int_equal(number, 6);
+		assert_int_equal(number, SNAP_CNT);
 
-		number = 10;
+		number = SNAP_CNT;
 		memset(&anchor, 0, sizeof(anchor));
 		enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
 			       buf, buf_len, &req);
-		assert_int_equal(number, 5);
+		assert_int_equal(number, SNAP_CNT);
 	}
 
 	ioreq_fini(&req);
@@ -366,7 +367,7 @@ rebuild_snap_punch_keys(void **state)
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	int		tgt = DEFAULT_FAIL_TGT;
-	daos_epoch_t	snap_epoch[5];
+	daos_epoch_t	snap_epoch[SNAP_CNT];
 	int		i;
 
 	if (!test_runable(arg, 4))
@@ -377,7 +378,7 @@ rebuild_snap_punch_keys(void **state)
 	oid = dts_oid_set_tgt(oid, tgt);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	/* Insert dkey/akey */
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < SNAP_CNT; i++) {
 		char dkey[20] = { 0 };
 		char akey[20] = { 0 };
 		char akey2[20] = { 0 };
@@ -394,8 +395,8 @@ rebuild_snap_punch_keys(void **state)
 		insert_single("dkey", akey2, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
-	/* Insert dkey/akey by different epoch */
-	for (i = 0; i < 5; i++) {
+	/* punch dkey/akey by different epoch */
+	for (i = 0; i < SNAP_CNT; i++) {
 		char dkey[20] = { 0 };
 		char akey[20] = { 0 };
 
@@ -411,7 +412,7 @@ rebuild_snap_punch_keys(void **state)
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
-		daos_key_desc_t  kds[10];
+		daos_key_desc_t  kds[SNAP_CNT + 1];
 		daos_anchor_t	 anchor;
 		char		 buf[256];
 		int		 buf_len = 256;
@@ -419,35 +420,35 @@ rebuild_snap_punch_keys(void **state)
 		int		 j;
 
 		daos_fail_value_set(i);
-		for (j = 0; j < 5; j++) {
+		for (j = 0; j < SNAP_CNT; j++) {
 			daos_handle_t th_open;
 			int rc;
 
 			rc = daos_tx_open_snap(arg->coh, snap_epoch[j],
 					       &th_open, NULL);
 			assert_int_equal(rc, 0);
-			number = 10;
+			number = SNAP_CNT + 1;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
 				       buf_len, &req);
-			assert_int_equal(number, 6 - j);
+			assert_int_equal(number, 21 - j);
 
-			number = 10;
+			number = SNAP_CNT + 1;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_akey(th_open, "dkey", &number, kds,
 				       &anchor, buf, buf_len, &req);
-			assert_int_equal(number, 10 - j);
+			assert_int_equal(number, 20 - j);
 
 			daos_tx_close(th_open, NULL);
 		}
 
-		number = 10;
+		number = SNAP_CNT;
 		memset(&anchor, 0, sizeof(anchor));
 		enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
 			       buf_len, &req);
 		assert_int_equal(number, 1);
 
-		number = 10;
+		number = SNAP_CNT;
 		memset(&anchor, 0, sizeof(anchor));
 		enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
 			       buf, buf_len, &req);
@@ -638,6 +639,41 @@ rebuild_objects(void **state)
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
+static void
+rebuild_large_snap(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	int		tgt = DEFAULT_FAIL_TGT;
+	daos_epoch_t	snap_epoch[100];
+	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = dts_oid_gen(arg->obj_class, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+	oid = dts_oid_set_tgt(oid, tgt);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/* Insert dkey/akey by different snapshot */
+	for (i = 0; i < 100; i++) {
+		char dkey[20] = { 0 };
+		char akey[20] = { 0 };
+
+		/* Update string for each snapshot */
+		daos_cont_create_snap(arg->coh, &snap_epoch[i], NULL, NULL);
+		sprintf(dkey, "dkey_%d", i);
+		sprintf(akey, "akey_%d", i);
+		insert_single(dkey, "a_key", 0, "data", 1, DAOS_TX_NONE, &req);
+		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
+	}
+
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	ioreq_fini(&req);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -662,6 +698,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_objects, rebuild_sub_setup, test_teardown},
 	{"REBUILD11: rebuild snapshotted punched object",
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD12: rebuild with 100 snapshot",
+	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
 };
 
 int

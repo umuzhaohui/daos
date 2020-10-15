@@ -285,7 +285,8 @@ oid_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-oid_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+oid_iv_alloc(struct ds_iv_entry *entry, struct ds_iv_key *key,
+	     d_sg_list_t *sgl)
 {
 	int rc;
 

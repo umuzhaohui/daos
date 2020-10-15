@@ -87,6 +87,13 @@ struct pool_iv_conns {
 	struct pool_iv_conn	pic_conns[0];
 };
 
+/** 
+ * During IV fetch, the server prepare the IV entry value
+ * size by pik_entry_size, when the IV fetch arrive the
+ * leader, which find out the size is not enough, it will
+ * reply REC2BIG, and also the required size by pool_iv_result,
+ * and then the server will retry.
+ */
 struct pool_iv_key {
 	uuid_t		pik_uuid;
 	uint32_t	pik_entry_size; /* IV entry size */
@@ -97,13 +104,23 @@ struct pool_iv_hdl {
 	uuid_t		pih_cont_hdl;
 };
 
+struct pool_iv_result {
+	int	pir_size;
+};
+
 struct pool_iv_entry {
 	union {
 		struct pool_iv_map	piv_map;
 		struct pool_iv_prop	piv_prop;
 		struct pool_iv_hdl	piv_hdl;
 		struct pool_iv_conns	piv_conn_hdls;
+		struct pool_iv_result	piv_result;
 	};
+};
+
+struct pool_iv_output {
+	int64_t		     pio_status;
+	struct pool_iv_entry pio_entry;
 };
 
 struct pool_map_refresh_ult_arg {
@@ -172,7 +189,7 @@ extern struct bio_reaction_ops nvme_reaction_ops;
 uint32_t pool_iv_map_ent_size(int nr);
 int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
-int pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv);
+//int pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv);
 void ds_pool_map_refresh_ult(void *arg);
 
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
@@ -182,8 +199,7 @@ int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);
 
 int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
-int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
-			      d_iov_t *conn_iov);
+int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */

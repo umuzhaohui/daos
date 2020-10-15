@@ -423,7 +423,7 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 			return -DER_IVCB_FORWARD;
 	}
 
-	rc = fetch_iv_value(entry, &key, iv_value, &entry->iv_value, priv);
+	rc = fetch_iv_value(entry, &key, iv_value, NULL, priv);
 	if (rc == 0)
 		entry->iv_valid = true;
 
@@ -551,7 +551,8 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	class = entry->iv_class;
 	if (iv_value) {
-		rc = class->iv_class_ops->ivc_value_alloc(entry, iv_value);
+		rc = class->iv_class_ops->ivc_value_alloc(entry, &key,
+							  iv_value);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -842,8 +843,18 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 		entry = iv_class_entry_lookup(cb_info->ns, cb_info->key);
 		D_ASSERT(entry != NULL);
 		iv_key_unpack(&key, iv_key);
-		ret = fetch_iv_value(entry, &key, cb_info->value, iv_value,
-				     NULL);
+		if (cb_info->value->sg_iovs[0].iov_buf_len >=
+		    iv_value->sg_iovs[0].iov_len &&
+		    iv_value->sg_iovs[0].iov_len > 0)
+			ret = fetch_iv_value(entry, &key,
+					     cb_info->value,
+					     iv_value, NULL);
+		else
+			D_DEBUG(DB_MD, "key %d/%d does not"
+				" provid enough buf "DF_U64" < "
+				DF_U64"\n", key.class_id, key.rank,
+				cb_info->value->sg_iovs[0].iov_buf_len,
+				iv_value->sg_iovs[0].iov_len);
 	}
 
 	ABT_future_set(cb_info->future, &rc);

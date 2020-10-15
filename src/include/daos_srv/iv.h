@@ -235,11 +235,13 @@ typedef int (*ds_iv_ent_refresh_t)(struct ds_iv_entry *entry,
  * allocate the value for cart IV.
  *
  * \param ent [IN]	entry to allocate iv_value.
+ * \param key [IN]	key of the IV call.
  * \param src [OUT]	buffer to be allocated.
  *
  * \return		0 if succeeds, error code otherwise.
  */
 typedef int (*ds_iv_value_alloc_t)(struct ds_iv_entry *ent,
+				   struct ds_iv_key *key,
 				   d_sg_list_t *sgl);
 
 /**

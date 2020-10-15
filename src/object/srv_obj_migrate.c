@@ -408,8 +408,10 @@ int migrate_pool_tls_create_one(void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" ver %d rc %d\n",
-		pool_tls, DP_UUID(pool_tls->mpt_pool_uuid), arg->version, rc);
+	D_DEBUG(DB_REBUILD, "TLS %p create for "DF_UUID" "DF_UUID"/"DF_UUID
+		"ver %d rc %d\n", pool_tls, DP_UUID(pool_tls->mpt_pool_uuid),
+		DP_UUID(arg->pool_hdl_uuid), DP_UUID(arg->co_hdl_uuid),
+		arg->version, rc);
 	d_list_add(&pool_tls->mpt_list, &tls->ot_pool_list);
 out:
 	if (rc && pool_tls)

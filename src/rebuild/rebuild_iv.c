@@ -260,7 +260,8 @@ out:
 }
 
 static int
-rebuild_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+rebuild_iv_alloc(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *sgl)
 {
 	return rebuild_iv_alloc_internal(sgl);
 }
