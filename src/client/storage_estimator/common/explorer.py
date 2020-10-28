@@ -59,6 +59,10 @@ class AverageFS(CommonBase):
         self._avg_name_size = 0
         self._total_files = 0
 
+    def set_verbose(self, verbose):
+        self._dfs.set_verbose(verbose)
+        self._verbose = verbose
+
     def set_dfs_inode(self, akey):
         self._dfs.set_dfs_inode(akey)
 
@@ -67,6 +71,15 @@ class AverageFS(CommonBase):
 
     def set_chunk_size(self, chunk_size):
         self._dfs.set_chunk_size(chunk_size)
+
+    def set_cells(self, cells):
+        self._dfs.set_cells(cells)
+
+    def set_parity(self, parity):
+        self._dfs.set_parity(parity)
+
+    def set_stripe_size(self, stripe_size):
+        self._dfs.set_stripe_size(stripe_size)
 
     def set_dfs_file_meta(self, dkey):
         self._dfs.set_dfs_file_meta(dkey)
@@ -92,6 +105,9 @@ class AverageFS(CommonBase):
     def get_dfs(self):
         new_dfs = self._dfs.copy()
         new_dfs = self._calculate_average_dir(new_dfs)
+        self._debug('EC Total Results')
+        new_dfs._all_ec_stats.show()
+        #new_dfs.show_stats()
 
         return new_dfs
 
@@ -142,21 +158,82 @@ class AverageFS(CommonBase):
         self._total_files += count_files
 
 
+class ECStats(CommonBase):
+    def __init__(self, cells, parity, verbose=False):
+        super(ECStats, self).__init__()
+        self._cells = cells
+        self._parity = parity
+        self.payload_cells = 0
+        self.parity_cells = 0
+        self.payload = 0
+        self.overhead = 0
+        self.file_size = 0
+        self.set_verbose(verbose)
+
+    def set_cells(self, cells):
+        self._cells = cells
+
+    def set_parity(self, parity):
+        self._parity = parity
+
+    def add(self, stats):
+        self.payload_cells += stats.payload_cells
+        self.parity_cells += stats.parity_cells
+        self.payload += stats.payload
+        self.overhead += stats.overhead
+        self.file_size += stats.file_size
+
+    def mul(self, mul):
+        self.payload_cells *= mul
+        self.parity_cells *= mul
+        self.payload *= mul
+        self.overhead *= mul
+        self.file_size *= mul
+
+    def show(self):
+        if self._parity:
+            self._debug('EC data stripe units:   {0}'.format(self.payload_cells))
+            self._debug('EC avg data per stripe: {0}'.format(self.payload))
+            self._debug('EC parity stripe units: {0}'.format(self.parity_cells))
+            self._debug('EC parity overhead:     {0}'.format(self.overhead))
+            parity_size = self.overhead // self._parity
+            self._debug('EC summary: {0} x {1} + {2} x {3} = {4} + {5}'.format(self.payload, self._cells, parity_size, self._parity, self.file_size, self.overhead))
+
+
 class DFS(CommonBase):
     def __init__(self):
         super(DFS, self).__init__()
         self._objects = []
         self._chunk_size = 1048576
         self._io_size = 131072
+        self._parity = 0
+        self._cells = 0
+        self._stripe_size = 0
+        self._all_ec_stats = ECStats(self._cells, self._parity)
 
         self._dkey0 = self._create_default_dkey0()
         self._dfs_inode_akey = self._create_default_inode_akey()
+
+    def set_verbose(self, verbose):
+        self._verbose = verbose
+        self._all_ec_stats.set_verbose(verbose)
 
     def set_io_size(self, io_size):
         self._io_size = io_size
 
     def set_chunk_size(self, chunk_size):
         self._chunk_size = chunk_size
+
+    def set_cells(self, cells):
+        self._cells = cells
+        self._all_ec_stats.set_cells(cells)
+
+    def set_parity(self, parity):
+        self._parity = parity
+        self._all_ec_stats.set_parity(parity)
+
+    def set_stripe_size(self, stripe_size):
+        self._stripe_size = stripe_size
 
     def set_dfs_file_meta(self, dkey):
         self._check_value_type(dkey, DKey)
@@ -178,6 +255,11 @@ class DFS(CommonBase):
         new_dfs._dkey0 = copy.deepcopy(self._dkey0)
         new_dfs._dfs_inode_akey = copy.deepcopy(self._dfs_inode_akey)
         new_dfs._objects = copy.deepcopy(self._objects)
+        new_dfs._cells = copy.deepcopy(self._cells)
+        new_dfs._parity = copy.deepcopy(self._parity)
+        new_dfs._stripe_size = copy.deepcopy(self._stripe_size)
+        new_dfs._verbose = copy.deepcopy(self._verbose)
+        new_dfs._all_ec_stats = copy.deepcopy(self._all_ec_stats)
 
         return new_dfs
 
@@ -224,6 +306,9 @@ class DFS(CommonBase):
     def update_object_count(self, oid, count):
         self._objects[oid].set_count(count)
 
+    def show_stats(self):
+        self._all_ec_stats.show()
+
     def _create_default_dkey0(self):
         akey = AKey(
             key_type=KeyType.INTEGER,
@@ -250,6 +335,7 @@ class DFS(CommonBase):
         self._check_positive_number(size)
         count = size // self._io_size
         remainder = size % self._io_size
+
         akey = AKey(
             key_type=KeyType.INTEGER,
             overhead=Overhead.USER,
@@ -274,30 +360,108 @@ class DFS(CommonBase):
 
         return dkey
 
-    def _add_chunk_size_elements(self, file_object, file_size):
+    def _add_ec_elements(self, file_object, file_size, parity_stats, chunk_count):
+        if chunk_count > 0:
+            # Data
+            dkey = self._create_file_dkey(self._stripe_size)
+            dkey.set_count(self._cells * chunk_count)
+            file_object.add_value(dkey)
+
+            self._debug('# adding cell size {0} x {1}'.format(self._stripe_size, self._cells * chunk_count))
+
+            parity_stats.file_size += file_size
+            parity_stats.payload_cells += self._cells
+            parity_stats.payload += self._stripe_size
+
+        parity_stats.parity_cells += self._parity
+        parity_stats.overhead += self._stripe_size * self._parity
+
+        # Parity
+        dkey = self._create_file_dkey(self._stripe_size)
+        if chunk_count:
+            dkey.set_count(self._parity * chunk_count)
+            parity_stats.mul(chunk_count)
+        else:
+            dkey.set_count(self._parity)
+        file_object.add_value(dkey)
+
+        return file_object
+
+    def _add_ec_remainder(self, file_object, file_size, parity_stats):
+        count = file_size // self._stripe_size
+        remainder = file_size % self._stripe_size
+
+        if file_size > 0:
+            # Data
+            dkey = self._create_file_dkey(self._stripe_size)
+            dkey.set_count(count)
+            file_object.add_value(dkey)
+
+            dkey = self._create_file_dkey(remainder)
+            dkey.set_count(int(remainder > 0))
+            file_object.add_value(dkey)
+
+            # Parity
+            dkey = self._create_file_dkey(self._stripe_size)
+            dkey.set_count(self._parity)
+            file_object.add_value(dkey)
+
+            parity_stats.file_size += file_size
+            parity_stats.payload_cells += self._cells
+            parity_stats.parity_cells += self._parity
+            parity_stats.payload += self._stripe_size
+            parity_stats.overhead += self._stripe_size * self._parity
+            parity_stats.mul(1)
+
+        return file_object
+
+    def _add_ec(self, file_object, file_size, parity_stats, count=1):
+        file_object = self._add_ec_elements(file_object, file_size, parity_stats, count)
+
+        return file_object
+
+    def _add_chunk_size_elements(self, file_object, file_size, parity_stats):
         count = file_size // self._chunk_size
-        if count > 0:
+        self._debug('adding {0} chunk(s) of size {1}'.format(count, self._chunk_size))
+
+        if self._parity:
+            file_object = self._add_ec(file_object, self._chunk_size, parity_stats, count)
+        elif count > 0:
             dkey = self._create_file_dkey(self._chunk_size)
             dkey.set_count(count)
             file_object.add_value(dkey)
 
         return file_object
 
-    def _add_chunk_size_remainder(self, file_object, file_size):
+    def _add_chunk_size_remainder(self, file_object, file_size, parity_stats):
         remainder = file_size % self._chunk_size
+
+        self._debug('adding 1 chunk of size {0}'.format(remainder))
+
         if remainder > 0:
-            dkey = self._create_file_dkey(remainder)
-            file_object.add_value(dkey)
+            if self._parity:
+                file_object = self._add_ec_remainder(file_object, remainder, parity_stats)
+            else:
+                dkey = self._create_file_dkey(remainder)
+                file_object.add_value(dkey)
 
         return file_object
 
     def create_file_obj(self, file_size, identical_files=1):
+        parity_stats = ECStats(self._cells, self._parity, self._verbose)
+
+        self._debug('adding {0} file(s) of size {1}'.format(identical_files, file_size))
         file_object = VosObject()
         file_object.add_value(self._dkey0)
         file_object.set_count(identical_files)
 
-        file_object = self._add_chunk_size_elements(file_object, file_size)
-        file_object = self._add_chunk_size_remainder(file_object, file_size)
+        file_object = self._add_chunk_size_elements(file_object, file_size, parity_stats)
+        file_object = self._add_chunk_size_remainder(file_object, file_size, parity_stats)
+
+        if self._parity:
+            parity_stats.show()
+            parity_stats.mul(identical_files)
+            self._all_ec_stats.add(parity_stats)
 
         self._objects.append(file_object)
 
@@ -317,7 +481,9 @@ class FileSystemExplorer(CommonBase):
 
         self._oid = 0
         self._dfs = DFS()
+        self._dfs.set_verbose(self._verbose)
         self._avg = AverageFS()
+        self._avg.set_verbose(self._verbose)
 
     def set_dfs_inode(self, akey):
         self._dfs.set_dfs_inode(akey)
@@ -331,6 +497,18 @@ class FileSystemExplorer(CommonBase):
         self._dfs.set_chunk_size(chunk_size)
         self._avg.set_chunk_size(chunk_size)
 
+    def set_cells(self, cells):
+        self._dfs.set_cells(cells)
+        self._avg.set_cells(cells)
+
+    def set_parity(self, parity):
+        self._dfs.set_parity(parity)
+        self._avg.set_parity(parity)
+
+    def set_stripe_size(self, stripe_size):
+        self._dfs.set_stripe_size(stripe_size)
+        self._avg.set_stripe_size(stripe_size)
+
     # TODO: Get the D-Key 0 information from the DAOS Array Object
     def set_dfs_file_meta(self, dkey):
         self.dfs.set_dfs_file_meta(dkey)
@@ -338,6 +516,7 @@ class FileSystemExplorer(CommonBase):
 
     def explore(self):
         self._debug('processing path: {0}'.format(self._path))
+        self._dfs.set_verbose(self._verbose)
         self._traverse_directories()
 
     def print_stats(self):
@@ -403,7 +582,10 @@ class FileSystemExplorer(CommonBase):
                 '  assuming average file size of {0} bytes'.format(avg_file_size))
             self._avg.add_average_file(self._count_files, avg_file_size)
 
-        return self._avg.get_dfs()
+        dfs = self._avg.get_dfs()
+        #dfs.show_stats()
+
+        return dfs
 
     def _read_directory_3(self, file_path):
         with os.scandir(file_path) as it:

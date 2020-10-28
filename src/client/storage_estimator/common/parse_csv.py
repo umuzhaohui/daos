@@ -64,13 +64,21 @@ class ProcessCSV(ProcessBase):
                 value_dict[name] = values[idx]
                 idx += 1
 
-            count_dir = int(value_dict.get("dir_count", 0))
-            dir_size = int(value_dict.get("dir_size", 0))
+            count_dir = int(value_dict.get("dir_count", 1))
+            total_dir_size = int(value_dict.get("dir_size", 32))
             count_files = int(value_dict.get("data_count", 0))
             count_symlink = int(value_dict.get("link_count", 0))
+            total_symlink_size = int(value_dict.get("link_size", 0))
 
-            symlink_size = int(value_dict.get("link_size", 0)
-                               ) // int(value_dict.get("link_count", 1))
+            if count_symlink > 0:
+                symlink_size = total_symlink_size // count_symlink
+            else:
+                symlink_size = 0
+
+            if count_dir > 0:
+                dir_name_size = total_dir_size // count_dir
+            else:
+                dir_name_size = 0
 
             total_items = count_files + count_symlink + count_dir
             unknown_items = int(
@@ -92,6 +100,8 @@ class ProcessCSV(ProcessBase):
                 'assuming {0} items per directory'.format(items_per_dir))
             self._debug(
                 'assuming average symlink size of {0} bytes'.format(symlink_size))
+            self._debug(
+                'assuming average dir size of {0} bytes'.format(dir_name_size))
 
             afs = AverageFS()
             afs.set_verbose(self._verbose)
@@ -99,14 +109,20 @@ class ProcessCSV(ProcessBase):
             afs.set_dfs_inode(inode_akey)
             afs.set_io_size(self._io_size)
             afs.set_chunk_size(self._chunk_size)
+
+            afs.set_cells(self.get_cells())
+            afs.set_parity(self.get_parity())
+            afs.set_stripe_size(self.get_stripe_size())
+
             afs.set_total_symlinks(count_symlink)
             afs.set_avg_symlink_size(symlink_size)
+            #afs.set_avg_name_size(dir_name_size)
             afs.set_total_directories(count_dir)
             afs.set_avg_name_size(self._args.file_name_size)
 
             for size in FILE_SIZES:
-                num_files = int(value_dict["%s_count" % size])
-                total_size = int(value_dict["%s_size" % size])
+                num_files = int(value_dict.get("%s_count" % size ,0))
+                total_size = int(value_dict.get("%s_size" % size ,0))
                 if num_files != 0:
                     avg_file_size = (total_size // num_files)
                     pretty_size = self._to_human(avg_file_size)
