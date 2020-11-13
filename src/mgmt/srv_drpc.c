@@ -163,7 +163,14 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to update group map\n");
+	D_INFO("Received request to update group map (op %d) with %zu servers\n",
+	       req->mod_op, req->n_servers);
+
+	if (req->mod_op >= CRT_GROUP_MOD_OP_COUNT) {
+		D_ERROR("Invalid group map mod operation %d\n", req->mod_op);
+		rc = -DER_INVAL;
+		goto out;
+	}
 
 	D_ALLOC_ARRAY(in.gui_servers, req->n_servers);
 	if (in.gui_servers == NULL) {
@@ -177,6 +184,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	in.gui_n_servers = req->n_servers;
 	in.gui_map_version = req->map_version;
+	in.mod_op = req->mod_op;
 
 	rc = ds_mgmt_group_update_handler(&in);
 out:

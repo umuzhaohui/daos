@@ -38,7 +38,8 @@ message GroupUpdateReq {
 		string uri = 2;
 	}
 	uint32 map_version = 1;
-	repeated Server servers = 2;
+	uint32 mod_op = 2;
+	repeated Server servers = 3;
 }
 
 message GroupUpdateResp {

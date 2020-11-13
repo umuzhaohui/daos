@@ -648,7 +648,7 @@ const ProtobufCMessageDescriptor mgmt__group_update_req__server__descriptor =
   (ProtobufCMessageInit) mgmt__group_update_req__server__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__group_update_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__group_update_req__field_descriptors[3] =
 {
   {
     "map_version",
@@ -663,8 +663,20 @@ static const ProtobufCFieldDescriptor mgmt__group_update_req__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "servers",
+    "mod_op",
     2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GroupUpdateReq, mod_op),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "servers",
+    3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__GroupUpdateReq, n_servers),
@@ -677,12 +689,13 @@ static const ProtobufCFieldDescriptor mgmt__group_update_req__field_descriptors[
 };
 static const unsigned mgmt__group_update_req__field_indices_by_name[] = {
   0,   /* field[0] = map_version */
-  1,   /* field[1] = servers */
+  1,   /* field[1] = mod_op */
+  2,   /* field[2] = servers */
 };
 static const ProtobufCIntRange mgmt__group_update_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__group_update_req__descriptor =
 {
@@ -692,7 +705,7 @@ const ProtobufCMessageDescriptor mgmt__group_update_req__descriptor =
   "Mgmt__GroupUpdateReq",
   "mgmt",
   sizeof(Mgmt__GroupUpdateReq),
-  2,
+  3,
   mgmt__group_update_req__field_descriptors,
   mgmt__group_update_req__field_indices_by_name,
   1,  mgmt__group_update_req__number_ranges,

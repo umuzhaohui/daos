@@ -78,12 +78,13 @@ struct  _Mgmt__GroupUpdateReq
 {
   ProtobufCMessage base;
   uint32_t map_version;
+  uint32_t mod_op;
   size_t n_servers;
   Mgmt__GroupUpdateReq__Server **servers;
 };
 #define MGMT__GROUP_UPDATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__group_update_req__descriptor) \
-    , 0, 0,NULL }
+    , 0, 0, 0,NULL }
 
 
 struct  _Mgmt__GroupUpdateResp

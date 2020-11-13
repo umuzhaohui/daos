@@ -148,12 +148,16 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 
 			svc.log.Debugf("processing %d join requests", len(joinReqs))
 			joinResps := make([]*batchJoinResponse, len(joinReqs))
+			joinedRanks := make(map[system.Rank]string)
 			for i, req := range joinReqs {
 				joinResps[i] = svc.join(parent, req)
+				if joinResps[i].joinErr == nil {
+					joinedRanks[system.Rank(joinResps[i].Rank)] = req.GetUri()
+				}
 			}
 
 			for i := 0; i < len(svc.harness.Instances()); i++ {
-				if err := svc.doGroupUpdate(parent); err != nil {
+				if err := svc.doGroupUpdate(parent, joinedRanks); err != nil {
 					if err == instanceNotReady {
 						svc.log.Debug("group update not ready (retrying)")
 						continue
@@ -261,7 +265,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	return resp
 }
 
-func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
+func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, batchRanks map[system.Rank]string) error {
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
 		return err
@@ -270,8 +274,17 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 		return system.ErrEmptyGroupMap
 	}
 
+	// If we're only processing a batch of ranks (e.g. from a batched Join),
+	// then we only want to send that subset down, but we still need to get the
+	// current group mapver. NB: This must be done carefully in order to avoid
+	// gaps in the local group map.
+	if batchRanks != nil {
+		gm.RankURIs = batchRanks
+	}
+
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
+		ModOp:      drpc.CART_GROUP_REPLACE,
 	}
 	rankSet := &system.RankSet{}
 	for rank, uri := range gm.RankURIs {
@@ -280,6 +293,12 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 			Uri:  uri,
 		})
 		rankSet.Add(rank)
+	}
+
+	// If we're only updating a subset, then we should add
+	// to the current group rather than replacing it.
+	if batchRanks != nil {
+		req.ModOp = drpc.CART_GROUP_ADD
 	}
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)

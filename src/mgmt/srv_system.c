@@ -103,8 +103,6 @@ mgmt_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 		goto err;
 	}
 
-	svc->map_servers = NULL;
-	svc->n_map_servers = 0;
 	svc->ms_rsvc.s_id = mgmt_svc_id;
 
 	rc = ABT_rwlock_create(&svc->ms_lock);
@@ -127,9 +125,6 @@ static void
 mgmt_svc_free_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc *svc = mgmt_svc_obj(rsvc);
-
-	if (svc->map_servers != NULL)
-		free_server_list(svc->map_servers, svc->n_map_servers);
 
 	ABT_rwlock_free(&svc->ms_lock);
 	D_FREE(svc);
@@ -168,33 +163,10 @@ free_server_list(struct server_entry *list, int len)
 	D_FREE(list);
 }
 
-static struct server_entry *
-dup_server_list(struct server_entry *in, int in_len)
-{
-	int		    i;
-	struct server_entry *out;
-
-	D_ALLOC_ARRAY(out, in_len);
-	if (out == NULL)
-		return NULL;
-
-	for (i = 0; i < in_len; i++) {
-		out[i].se_rank = in[i].se_rank;
-		D_STRNDUP(out[i].se_uri, in[i].se_uri, ADDR_STR_MAX_LEN - 1);
-		if (out[i].se_uri == NULL) {
-			free_server_list(out, in_len);
-			return NULL;
-		}
-	}
-
-	return out;
-}
-
 int
 ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 {
 	struct mgmt_svc		*svc;
-	struct server_entry	*map_servers;
 	int			rc;
 
 	/* ensure that it's started */
@@ -209,7 +181,7 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 
 	D_DEBUG(DB_MGMT, "setting %d servers in map version %u\n",
 		in->gui_n_servers, in->gui_map_version);
-	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE, in->gui_servers,
+	rc = ds_mgmt_group_update(in->mod_op, in->gui_servers,
 				  in->gui_n_servers, in->gui_map_version);
 	if (rc != 0)
 		goto out_svc;
@@ -217,22 +189,7 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 	D_DEBUG(DB_MGMT, "set %d servers in map version %u\n",
 		in->gui_n_servers, in->gui_map_version);
 
-	map_servers = dup_server_list(in->gui_servers, in->gui_n_servers);
-	if (map_servers == NULL) {
-		rc = -DER_NOMEM;
-		goto out_svc;
-	}
-
-	ABT_rwlock_wrlock(svc->ms_lock);
-
-	if (svc->map_servers != NULL)
-		free_server_list(svc->map_servers, svc->n_map_servers);
-
-	svc->map_servers = map_servers;
-	svc->n_map_servers = in->gui_n_servers;
 	svc->map_version = in->gui_map_version;
-
-	ABT_rwlock_unlock(svc->ms_lock);
 
 	D_DEBUG(DB_MGMT, "requesting dist of map version %u (%u servers)\n",
 		in->gui_map_version, in->gui_n_servers);
@@ -294,27 +251,45 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct dss_module_info *info = dss_get_module_info();
-	uint32_t		map_version;
-	int			n_map_servers;
 	struct server_entry	*map_servers;
-	int			rc;
+	d_rank_list_t		*map_ranks;
+	crt_group_t		*grp;
+	int			i, rc;
 
-	ABT_rwlock_rdlock(svc->ms_lock);
+	grp = crt_group_lookup(NULL);
+	D_ASSERT(grp != NULL);
 
-	map_servers = dup_server_list(svc->map_servers, svc->n_map_servers);
+	rc = crt_group_ranks_get(grp, &map_ranks);
+	if (rc != 0)
+		return rc;
+
+	D_ALLOC_ARRAY(map_servers, map_ranks->rl_nr);
 	if (map_servers == NULL) {
-		ABT_rwlock_unlock(svc->ms_lock);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto out_ranks;
 	}
-	n_map_servers = svc->n_map_servers;
-	map_version = svc->map_version;
 
-	ABT_rwlock_unlock(svc->ms_lock);
+	for (i = 0; i < map_ranks->rl_nr; i++) {
+		d_rank_t rank = map_ranks->rl_ranks[i];
 
-	rc = map_update_bcast(info->dmi_ctx, svc, map_version,
-			      n_map_servers, map_servers);
+		map_servers[i].se_rank = rank;
+		rc = crt_rank_uri_get(grp, rank, 0 /* tag */,
+				      &(map_servers[i].se_uri));
+		if (rc != 0) {
+			D_ERROR("unable to get rank %u URI: "DF_RC"\n", rank,
+				DP_RC(rc));
+			goto out_servers;
+		}
+	}
 
-	free_server_list(map_servers, n_map_servers);
+	rc = map_update_bcast(info->dmi_ctx, svc, svc->map_version,
+			      map_ranks->rl_nr, map_servers);
+
+out_servers:
+	free_server_list(map_servers, map_ranks->rl_nr);
+
+out_ranks:
+	d_rank_list_free(map_ranks);
 
 	return rc;
 }

@@ -60,12 +60,11 @@ struct mgmt_svc {
 	struct ds_rsvc		ms_rsvc;
 	ABT_rwlock		ms_lock;
 	uint32_t		map_version;
-	struct server_entry	*map_servers;
-	int			n_map_servers;
 };
 
 struct mgmt_grp_up_in {
 	uint32_t		gui_map_version;
+	crt_group_mod_op_t	mod_op;
 	struct server_entry	*gui_servers;
 	int			gui_n_servers;
 };
