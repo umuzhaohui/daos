@@ -340,6 +340,11 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_cond, rc = dss_abterr2der(rc));
 
+	rc = ABT_cond_create(&pool->sp_ec_agg_done_cond);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(err_done_cond, rc = dss_abterr2der(rc));
+
+	D_INIT_LIST_HEAD(&pool->sp_ec_ephs_list);
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
@@ -350,7 +355,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool group: %d\n",
 			DP_UUID(key), rc);
-		goto err_done_cond;
+		goto err_ec_cond;
 	}
 
 	rc = ds_iv_ns_create(info->dmi_ctx, pool->sp_uuid, pool->sp_group,
@@ -379,6 +384,8 @@ err_iv_ns:
 	ds_iv_ns_destroy(pool->sp_iv_ns);
 err_group:
 	crt_group_secondary_destroy(pool->sp_group);
+err_ec_cond:
+	ABT_cond_free(&pool->sp_ec_agg_done_cond);
 err_done_cond:
 	rc = ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 	if (rc != 0)
@@ -423,6 +430,7 @@ pool_free_ref(struct daos_llink *llink)
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
 
+	ABT_cond_free(&pool->sp_ec_agg_done_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_free(&pool->sp_mutex);
@@ -570,6 +578,12 @@ out:
 		D_FREE(iov.iov_buf);
 }
 
+static void
+tgt_ec_agg_ult(void *data)
+{
+	ds_cont_tgt_ec_agg_ult(data);
+}
+
 /*
  * Start a pool. Must be called on the system xstream. Hold the ds_pool object
  * till ds_pool_stop. Only for mgmt and pool modules.
@@ -625,6 +639,13 @@ ds_pool_start(uuid_t uuid)
 	}
 
 	pool->sp_fetch_hdls = 1;
+	rc = dss_ult_create(tgt_ec_agg_ult, pool, DSS_ULT_POOL_SRV, 0, 0, NULL);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed create ec eph equery ult: %d\n",
+			DP_UUID(uuid), rc);
+		ds_pool_put(pool);
+		D_GOTO(out_lock, rc);
+	}
 out_lock:
 	ABT_mutex_unlock(pool_cache_lock);
 	return rc;
@@ -661,6 +682,7 @@ ds_pool_stop(uuid_t uuid)
 		return;
 	pool->sp_stopping = 1;
 
+	ds_cont_tgt_ec_agg_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 	ds_rebuild_abort(pool->sp_uuid, -1);
 	ds_migrate_abort(pool->sp_uuid, -1);

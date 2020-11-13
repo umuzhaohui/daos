@@ -55,7 +55,9 @@ struct ds_pool {
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
+	ABT_cond		sp_ec_agg_done_cond;
 	struct ds_iv_ns	       *sp_iv_ns;
+	d_list_t		sp_ec_ephs_list;
 	uint32_t		sp_dtx_resync_version;
 	/* Special pool/container handle uuid, which are
 	 * created on the pool leader step up, and propagated
