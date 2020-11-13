@@ -311,6 +311,13 @@ csv_file.add_argument(
 csv_file.add_argument('-a', '--alloc_overhead', type=int,
                       help='Vos alloc overhead', default=16)
 csv_file.add_argument(
+    '-r',
+    '--oclass',
+    type=str,
+    help='Predefined object classes. It describes schema of data distribution & protection.',
+    default='SX')
+
+csv_file.add_argument(
     '-l',
     '--cells',
     type=int,
@@ -328,6 +335,7 @@ csv_file.add_argument(
     type=str,
     help='Stripe size',
     default='1MiB')
+
 csv_file.add_argument(
     '-m',
     '--meta',

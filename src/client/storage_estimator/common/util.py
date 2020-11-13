@@ -131,10 +131,52 @@ class CommonBase(object):
         return number
 
 
+class ObjectClass(object):
+    def __init__(self, args):
+        self._set_oclass(args)
+
+    def _set_oclass(self, args):
+        supported_oclasses = self._get_oclass_definitions()
+
+        if 'oclass' not in args:
+            self._oclass = 'SX'
+            return
+
+        if args.oclass not in supported_oclasses:
+            raise ValueError('unknown object class "{0}"'.format(args.oclass))
+
+        self._oclass = args.oclass
+
+    def get_targets(self):
+        return self._get_oclass_definitions[self._oclass][0]
+
+    def get_stripe(self):
+        return self._get_oclass_definitions[self._oclass][1]
+
+    def get_parity(self):
+        return self._get_oclass_definitions[self._oclass][2]
+
+    def get_replicas(self):
+        return self._get_oclass_definitions[self._oclass][3]
+
+    def get_supported_oclass(self):
+        return self._get_oclass_definitions().keys()
+
+    def _get_oclass_definitions(self):
+        return {# spreads across all targets within the pool
+                'SX'       : (0, 0, 0, 0),
+                # 3 replicas, it spreads across all targets within the pool
+                'RP_3GX'   : (0, 0, 0, 3),
+                # 16+2 EC object spreads across all targets within the pool
+                'EC_16P2GX': (0, 16, 2, 0)
+                }
+
+
 class ProcessBase(CommonBase):
     def __init__(self, args):
         super(ProcessBase, self).__init__()
         self._args = args
+        self._oclass = ObjectClass(args)
         self.set_verbose(args.verbose)
         self._meta = self._get_vos_meta(args)
         self._process_block_values()
