@@ -32,6 +32,7 @@
 #include <daos/event.h>
 #include <daos/container.h>
 #include <daos/array.h>
+#include <daos/object.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -1785,9 +1786,36 @@ out:
 	return rc;
 }
 
+static int
+lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
+	        mode_t *mode, struct stat *stbuf);
+
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
-	   mode_t *mode, struct stat *stbuf)
+           mode_t *mode, struct stat *stbuf)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (_obj == NULL)
+		return EINVAL;
+	if (path == NULL || strnlen(path, PATH_MAX) > PATH_MAX - 1)
+		return EINVAL;
+
+        /** if we added a prefix, check and skip over it */
+        if (dfs->prefix) {
+                if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
+                        return EINVAL;
+
+                path += dfs->prefix_len;
+        }
+
+	//D_ERROR("==== dfs_lookup()\n");
+	return lookup_rel_path(dfs, &dfs->root, path, flags, _obj, mode, stbuf);
+}
+
+static int
+lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
+		mode_t *mode, struct stat *stbuf)
 {
 	dfs_obj_t		parent;
 	dfs_obj_t		*obj = NULL;
@@ -1798,22 +1826,16 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	struct dfs_entry	entry = {0};
 	size_t			len;
 	int			rc;
+	bool			parent_fully_valid;
 
-	if (dfs == NULL || !dfs->mounted)
-		return EINVAL;
-	if (_obj == NULL)
-		return EINVAL;
-	if (path == NULL || strnlen(path, PATH_MAX) > PATH_MAX - 1)
-		return EINVAL;
-	if (path[0] != '/')
-		return EINVAL;
-
-	/** if we added a prefix, check and skip over it */
-	if (dfs->prefix) {
-		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
-			return EINVAL;
-
-		path += dfs->prefix_len;
+	/* Paths from dfs->root must be absolute.
+	 * Paths from others must be relative. */
+	if (root == &dfs->root) {
+		if (path[0] != '/')
+			return ENOENT;
+	} else {
+		if (path[0] == '/')
+			return ENOENT;
 	}
 
 	daos_mode = get_daos_obj_mode(flags);
@@ -1831,10 +1853,10 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	if (obj == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
-	oid_cp(&obj->oid, dfs->root.oid);
-	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
-	obj->mode = dfs->root.mode;
-	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH + 1);
+	oid_cp(&obj->oid, root->oid);
+	oid_cp(&obj->parent_oid, root->parent_oid);
+	obj->mode = root->mode;
+	strncpy(obj->name, root->name, DFS_MAX_PATH + 1);
 
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
@@ -1845,11 +1867,54 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&parent.oid, obj->oid);
 	oid_cp(&parent.parent_oid, obj->parent_oid);
 
+	//D_ERROR("==== lookup_rel_path: %s\n", path);
 	/** get the obj entry in the path */
 	for (token = strtok_r(rem, "/", &sptr);
 	     token != NULL;
 	     token = strtok_r(NULL, "/", &sptr)) {
-dfs_lookup_loop:
+lookup_rel_path_loop:
+		//D_ERROR("==== lookup_loop: %s\n", token);
+
+		// HERE
+		/* 
+		 * Open the directory object one level up.
+		 * Since fetch_entry does not support ".",
+		 * we can't support ".." as the last entry,
+		 * nor can we support "../.." because we don't
+		 * have parent.parent_oid and parent.mode.
+		 * For now, represent this partial state with
+		 * parent_fully_valid.
+		 */
+		parent_fully_valid = true;
+		if (strcmp(token, "..") == 0) {
+			parent_fully_valid = false;
+
+			/* Cannot go outside the container */
+			if (daos_oid_cmp(parent.oid, dfs->root.oid) == 0) {
+				D_GOTO(err_obj, rc = ENOENT);
+			}
+
+			rc = daos_obj_close(obj->oh, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_close() Failed (%d)\n", rc);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+
+			rc = daos_obj_open(dfs->coh, parent.parent_oid,
+					   daos_mode, &obj->oh, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+
+			oid_cp(&parent.oid, parent.parent_oid);
+			parent.oh = obj->oh;
+
+			/* TODO support fetch_entry(".") */
+			token = strtok_r(NULL, "/", &sptr);
+			if (!token || strcmp(token, "..") == 0)
+				D_GOTO(err_obj, rc = ENOTSUP);
+		}
 
 		len = strlen(token);
 
@@ -1864,9 +1929,11 @@ dfs_lookup_loop:
 			D_ERROR("daos_obj_close() Failed (%d)\n", rc);
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
+		//D_ERROR("==== lookup_loop: obj closed\n");
 
 		if (!exists)
 			D_GOTO(err_obj, rc = ENOENT);
+		//D_ERROR("==== lookup_loop: exists\n");
 
 		oid_cp(&obj->oid, entry.oid);
 		oid_cp(&obj->parent_oid, parent.oid);
@@ -1914,21 +1981,34 @@ dfs_lookup_loop:
 			 */
 			token = strtok_r(NULL, "/", &sptr);
 			if (token) {
+				//D_ERROR("==== recurse 1\n");
 				dfs_obj_t *sym;
 
-				rc = dfs_lookup(dfs, entry.value, flags, &sym,
-						NULL, NULL);
+				if (!parent_fully_valid &&
+				    strncmp(entry.value, "..", 2) == 0) {
+					D_FREE(entry.value);
+					D_FREE(sym);
+					D_GOTO(err_obj, rc = ENOTSUP);
+				}
+
+				rc = lookup_rel_path(dfs, &parent, entry.value,
+						     flags, &sym, NULL, NULL);
 				if (rc) {
 					D_DEBUG(DB_TRACE,
 						"Failed to lookup symlink %s\n",
 						entry.value);
 					D_FREE(entry.value);
 					D_FREE(sym);
-					D_FREE(entry.value);
 					D_GOTO(err_obj, rc);
 				}
+				//D_ERROR("==== recurse 1 GOOD: %s\n", sym->name);
 
+				obj->oh = sym->oh;
 				parent.oh = sym->oh;
+				parent.mode = sym->mode;
+				oid_cp(&parent.oid, sym->oid);
+				oid_cp(&parent.parent_oid, sym->parent_oid);
+
 				D_FREE(sym);
 				D_FREE(entry.value);
 				obj->value = NULL;
@@ -1936,9 +2016,38 @@ dfs_lookup_loop:
 				 * need to go to to the beginning of loop but we
 				 * already did the strtok.
 				 */
-				goto dfs_lookup_loop;
+				goto lookup_rel_path_loop;
 			}
 
+			/* Conditionally dereference leaf symlinks */
+			if (!(flags & O_NOFOLLOW)) {
+				//D_ERROR("==== recurse 2: %s / %s\n", parent.name, entry.value);
+
+				if (!parent_fully_valid &&
+				    strncmp(entry.value, "..", 2) == 0) {
+					//D_ERROR("==== recurse 2: ENOTSUP\n");
+					D_FREE(entry.value);
+					D_GOTO(err_obj, rc = ENOTSUP);
+				}
+
+				rc = lookup_rel_path(dfs, &parent, entry.value,
+						     flags, &obj, mode, stbuf);
+				if (rc) {
+					//D_ERROR("==== recurse 2 FAIL: %s\n", entry.value);
+					D_DEBUG(DB_TRACE,
+						"Failed to lookup symlink %s\n",
+						entry.value);
+					D_FREE(entry.value);
+					D_GOTO(err_obj, rc);
+				}
+				//D_ERROR("==== recursive return: %s\n", obj->name);
+				
+				/* return this dereferenced obj */
+				D_FREE(entry.value);
+				D_GOTO(out, rc);
+			}
+
+			//D_ERROR("==== no recurse\n");
 			/* Create a truncated version of the string */
 			D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
 			if (obj->value == NULL) {
@@ -2227,13 +2336,29 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		}
 	} else if (S_ISLNK(entry.mode)) {
-		/* Create a truncated version of the string */
-		D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
-		if (obj->value == NULL)
-			D_GOTO(err_obj, rc = ENOMEM);
-		D_FREE(entry.value);
-		if (stbuf)
-			stbuf->st_size = entry.value_len;
+		if (flags & O_NOFOLLOW) {
+			/* Create a truncated version of the string */
+			D_STRNDUP(obj->value, entry.value, entry.value_len + 1);
+			D_FREE(entry.value);
+			if (obj->value == NULL)
+				D_GOTO(err_obj, rc = ENOMEM);
+			if (stbuf)
+				stbuf->st_size = entry.value_len;
+		} else {
+			//D_ERROR("==== recurse: %s\n", entry.value);
+			/* dereference the symlink */
+			rc = lookup_rel_path(dfs, parent, entry.value, flags,
+					     &obj, mode, stbuf);
+			if (rc) {
+				D_DEBUG(DB_TRACE,
+					"Failed to lookup symlink %s\n",
+					entry.value);
+				D_FREE(entry.value);
+				D_GOTO(err_obj, rc);
+			}
+			D_FREE(entry.value);
+			D_GOTO(out, rc);
+		}
 	} else if (S_ISDIR(entry.mode)) {
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
@@ -2261,6 +2386,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		stbuf->st_ctim.tv_sec = entry.ctime;
 	}
 
+out:
 	obj->flags = flags;
 	*_obj = obj;
 
@@ -3019,7 +3145,8 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 
 	D_ASSERT(entry.value);
 
-	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL, NULL);
+	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym,
+			     NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
 			entry.value);
@@ -3101,7 +3228,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 		D_ASSERT(entry.value);
 
-		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL, NULL);
+		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL);
 		if (rc) {
 			D_ERROR("Failed to lookup symlink %s\n", entry.value);
 			D_FREE(entry.value);
