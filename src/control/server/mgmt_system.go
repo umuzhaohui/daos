@@ -45,13 +45,13 @@ const (
 	instanceUpdateDelay = 500 * time.Millisecond
 
 	batchJoinInterval = 250 * time.Millisecond
-	joinRespTimeout   = 10 * time.Millisecond
 )
 
 type (
 	batchJoinRequest struct {
 		mgmtpb.JoinReq
 		peerAddr *net.TCPAddr
+		ctx      context.Context
 		respCh   chan *batchJoinResponse
 	}
 
@@ -131,12 +131,12 @@ func (svc *mgmtSvc) startJoinLoop(ctx context.Context) {
 	go svc.joinLoop(ctx)
 }
 
-func (svc *mgmtSvc) joinLoop(parent context.Context) {
+func (svc *mgmtSvc) joinLoop(ctx context.Context) {
 	var joinReqs []*batchJoinRequest
 
 	for {
 		select {
-		case <-parent.Done():
+		case <-ctx.Done():
 			svc.log.Debug("stopped joinLoop")
 			return
 		case jr := <-svc.joinReqs:
@@ -150,14 +150,14 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 			joinResps := make([]*batchJoinResponse, len(joinReqs))
 			joinedRanks := make(map[system.Rank]string)
 			for i, req := range joinReqs {
-				joinResps[i] = svc.join(parent, req)
+				joinResps[i] = svc.join(ctx, req)
 				if joinResps[i].joinErr == nil {
 					joinedRanks[system.Rank(joinResps[i].Rank)] = req.GetUri()
 				}
 			}
 
 			for i := 0; i < len(svc.harness.Instances()); i++ {
-				if err := svc.doGroupUpdate(parent, joinedRanks); err != nil {
+				if err := svc.doGroupUpdate(ctx, joinedRanks); err != nil {
 					if err == instanceNotReady {
 						svc.log.Debug("group update not ready (retrying)")
 						continue
@@ -175,12 +175,11 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 
 			svc.log.Debugf("sending %d join responses", len(joinReqs))
 			for i, req := range joinReqs {
-				ctx, cancel := context.WithTimeout(parent, joinRespTimeout)
-				defer cancel()
-
 				select {
 				case <-ctx.Done():
-					svc.log.Errorf("failed to send join response: %s", ctx.Err())
+					svc.log.Errorf("failed to send join response (parent context): %s", ctx.Err())
+				case <-req.ctx.Done():
+					svc.log.Errorf("failed to send join response (request context): %s", req.ctx.Err())
 				case req.respCh <- joinResps[i]:
 				}
 			}
@@ -351,6 +350,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	bjr := &batchJoinRequest{
 		JoinReq:  *req,
 		peerAddr: replyAddr,
+		ctx:      ctx, // stash the request context to check when sending the response
 		respCh:   make(chan *batchJoinResponse),
 	}
 

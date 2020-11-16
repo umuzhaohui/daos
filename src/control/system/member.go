@@ -392,7 +392,12 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	resp = new(JoinResponse)
 	curMember, err := m.db.FindMemberByUUID(req.UUID)
 	if err == nil {
-		if !curMember.Rank.Equals(req.Rank) {
+		// In some cases, a rejoining member may still have a nil rank if
+		// something went wrong before it could persist the rank. As long as
+		// the UUID is the same, it should be safe to allow it to rejoin and
+		// try again at persisting the rank. If the rank is actually set to
+		// something different, though, this should be an error.
+		if !curMember.Rank.Equals(req.Rank) && !req.Rank.Equals(NilRank) {
 			return nil, errors.Errorf("re-joining server %s has different rank (%d != %d)",
 				req.UUID, req.Rank, curMember.Rank)
 		}
