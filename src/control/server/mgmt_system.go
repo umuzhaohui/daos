@@ -43,8 +43,8 @@ import (
 
 const (
 	instanceUpdateDelay = 500 * time.Millisecond
-
-	batchJoinInterval = 250 * time.Millisecond
+	batchJoinInterval   = 250 * time.Millisecond
+	batchMaxSize        = 256 // limit batches to this size or smaller
 )
 
 type (
@@ -131,6 +131,50 @@ func (svc *mgmtSvc) startJoinLoop(ctx context.Context) {
 	go svc.joinLoop(ctx)
 }
 
+func (svc *mgmtSvc) processJoins(ctx context.Context, joinReqs []*batchJoinRequest) {
+	if len(joinReqs) == 0 {
+		return
+	}
+
+	svc.log.Debugf("processing %d join requests", len(joinReqs))
+	joinResps := make([]*batchJoinResponse, len(joinReqs))
+	joinedRanks := make(map[system.Rank]string)
+	for i, req := range joinReqs {
+		joinResps[i] = svc.join(ctx, req)
+		if joinResps[i].joinErr == nil {
+			joinedRanks[system.Rank(joinResps[i].Rank)] = req.GetUri()
+		}
+	}
+
+	for i := 0; i < len(svc.harness.Instances()); i++ {
+		if err := svc.doGroupUpdate(ctx, joinedRanks); err != nil {
+			if err == instanceNotReady {
+				svc.log.Debug("group update not ready (retrying)")
+				continue
+			}
+
+			err = errors.Wrap(err, "failed to perform CaRT group update")
+			for i, jr := range joinResps {
+				if jr.joinErr == nil {
+					joinResps[i] = &batchJoinResponse{joinErr: err}
+				}
+			}
+		}
+		break
+	}
+
+	svc.log.Debugf("sending %d join responses", len(joinReqs))
+	for i, req := range joinReqs {
+		select {
+		case <-ctx.Done():
+			svc.log.Errorf("failed to send join response (parent context): %s", ctx.Err())
+		case <-req.ctx.Done():
+			svc.log.Errorf("failed to send join response (request context): %s", req.ctx.Err())
+		case req.respCh <- joinResps[i]:
+		}
+	}
+}
+
 func (svc *mgmtSvc) joinLoop(ctx context.Context) {
 	var joinReqs []*batchJoinRequest
 
@@ -141,49 +185,16 @@ func (svc *mgmtSvc) joinLoop(ctx context.Context) {
 			return
 		case jr := <-svc.joinReqs:
 			joinReqs = append(joinReqs, jr)
+
+			// Special case for large-scale systems... Limit the batch
+			// size in order to avoid hitting dRPC/protobuf-c message
+			// size limits.
+			if len(joinReqs) >= batchMaxSize {
+				svc.processJoins(ctx, joinReqs)
+				joinReqs = nil
+			}
 		case <-time.After(batchJoinInterval):
-			if len(joinReqs) == 0 {
-				continue
-			}
-
-			svc.log.Debugf("processing %d join requests", len(joinReqs))
-			joinResps := make([]*batchJoinResponse, len(joinReqs))
-			joinedRanks := make(map[system.Rank]string)
-			for i, req := range joinReqs {
-				joinResps[i] = svc.join(ctx, req)
-				if joinResps[i].joinErr == nil {
-					joinedRanks[system.Rank(joinResps[i].Rank)] = req.GetUri()
-				}
-			}
-
-			for i := 0; i < len(svc.harness.Instances()); i++ {
-				if err := svc.doGroupUpdate(ctx, joinedRanks); err != nil {
-					if err == instanceNotReady {
-						svc.log.Debug("group update not ready (retrying)")
-						continue
-					}
-
-					err = errors.Wrap(err, "failed to perform CaRT group update")
-					for i, jr := range joinResps {
-						if jr.joinErr == nil {
-							joinResps[i] = &batchJoinResponse{joinErr: err}
-						}
-					}
-				}
-				break
-			}
-
-			svc.log.Debugf("sending %d join responses", len(joinReqs))
-			for i, req := range joinReqs {
-				select {
-				case <-ctx.Done():
-					svc.log.Errorf("failed to send join response (parent context): %s", ctx.Err())
-				case <-req.ctx.Done():
-					svc.log.Errorf("failed to send join response (request context): %s", req.ctx.Err())
-				case req.respCh <- joinResps[i]:
-				}
-			}
-
+			svc.processJoins(ctx, joinReqs)
 			joinReqs = nil
 		}
 	}
