@@ -170,6 +170,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 			  / NSEC_PER_MSEC;
 
 	/* Update all piggybacked members with remote delays */
+	D_SPIN_LOCK(&csm->csm_lock);
 	for (i = 0; i < rpc_swim_input->upds.ca_count; i++) {
 		struct swim_member_state *state;
 		swim_id_t id;
@@ -177,29 +178,30 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		state = &rpc_swim_input->upds.ca_arrays[i].smu_state;
 		id = rpc_swim_input->upds.ca_arrays[i].smu_id;
 
-		D_SPIN_LOCK(&csm->csm_lock);
 		D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 			if (cst->cst_id == id) {
-				snd_delay = cst->cst_state.sms_delay;
-				snd_delay = snd_delay
-					  ? (snd_delay + state->sms_delay) / 2
-					  : state->sms_delay;
-				cst->cst_state.sms_delay = snd_delay;
+				uint32_t l = cst->cst_state.sms_delay;
+
+				if (id == from_id) {
+					l = l ? (l + rcv_delay) / 2 : rcv_delay;
+					snd_delay = l;
+				} else {
+					uint32_t r = state->sms_delay;
+
+					l = l ? (l + r) / 2 : r;
+				}
+				cst->cst_state.sms_delay = l;
+
+				if (crt_swim_fail_delay &&
+				    crt_swim_fail_id == id) {
+					crt_swim_fail_hlc = hlc
+							  - l * NSEC_PER_MSEC
+							  + crt_swim_fail_delay
+							  * NSEC_PER_SEC;
+					crt_swim_fail_delay = 0;
+				}
 				break;
 			}
-		}
-		D_SPIN_UNLOCK(&csm->csm_lock);
-	}
-
-	/* Update from_id member with remote delay */
-	D_SPIN_LOCK(&csm->csm_lock);
-	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
-		if (cst->cst_id == from_id) {
-			snd_delay = cst->cst_state.sms_delay;
-			snd_delay = snd_delay ? (snd_delay + rcv_delay) / 2
-					      : rcv_delay;
-			cst->cst_state.sms_delay = snd_delay;
-			break;
 		}
 	}
 	D_SPIN_UNLOCK(&csm->csm_lock);
@@ -230,12 +232,6 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	}
 
 out:
-	if (crt_swim_fail_delay && crt_swim_fail_id == from_id) {
-		crt_swim_fail_hlc = rpc_priv->crp_req_hdr.cch_hlc
-				  + crt_swim_fail_delay * NSEC_PER_SEC;
-		crt_swim_fail_delay = 0;
-	}
-
 	if ((rpc_req->cr_opc & 0xFFFF) == 0) /* is one way RPC? */
 		return;
 
