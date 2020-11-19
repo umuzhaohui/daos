@@ -38,7 +38,12 @@ struct dtx_rsrvd_uint {
 };
 
 enum dtx_cos_flags {
-	DCF_SHARED	= (1 << 0),
+	DCF_SHARED		= (1 << 0),
+	/* Some DTX (such as for the distributed transaction across multiple
+	 * RDGs, or for EC object modification) need to be committed via DTX
+	 * RPC instead of piggyback via other dispatched update/punch RPC.
+	 */
+	DCF_EXP_CMT		= (1 << 1),
 };
 
 struct dtx_cos_key {

@@ -80,6 +80,7 @@ static int
 find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	 daos_anchor_t *anchor)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	daos_handle_t		 ih;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 kiov;
@@ -121,12 +122,22 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		ci_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
+		if (rc == -DER_TX_UNCERTAINTY &&
+		    dth->dth_share_tbd_count < DTX_UNCERTAINTY_MAX)
+			/* Continue to detect other potential DTX uncertainty */
+			goto next;
+
 		if (rc != 0)
 			break;
 
 		rc = check_key(query, rbund.rb_krec);
 		if (rc == 0)
 			break;
+
+		if (rc == -DER_TX_UNCERTAINTY &&
+		    dth->dth_share_tbd_count < DTX_UNCERTAINTY_MAX)
+			/* Continue to detect other potential DTX uncertainty */
+			continue;
 
 		if (rc != -DER_NONEXIST)
 			break;
@@ -135,6 +146,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		query->qt_epr = epr;
 		query->qt_punch = punch;
 
+next:
 		if (query->qt_flags & VOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);
 		else
@@ -146,7 +158,7 @@ out:
 	if (rc == 0)
 		rc = fini_rc;
 
-	return rc;
+	return vos_detect_dtx_uncertainty() ? -DER_TX_UNCERTAINTY : rc;
 }
 
 static int
