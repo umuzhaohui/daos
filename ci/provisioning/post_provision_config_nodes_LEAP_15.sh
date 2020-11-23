@@ -79,5 +79,8 @@ post_provision_config_nodes() {
 
     # now make sure everything is fully up-to-date
     zypper addlock daos daos-\*
-    time zypper --non-interactive up
+    #time zypper --non-interactive up
+    time zypper --non-interactive install dnf
+    time ln -s /etc/zypp/repos.d /etc/yum.repos.d
+    time dnf -y upgrade --exclude fuse,mercury,daos,daos-\*
 }
