@@ -61,6 +61,9 @@ dtx_handler(crt_rpc_t *rpc)
 
 	switch (opc) {
 	case DTX_COMMIT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
@@ -74,6 +77,9 @@ dtx_handler(crt_rpc_t *rpc)
 		}
 		break;
 	case DTX_ABORT:
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
+			break;
+
 		while (i < din->di_dtx_array.ca_count) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;

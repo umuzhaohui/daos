@@ -447,6 +447,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	}
 
 	ABT_mutex_lock(cont->sc_mutex);
+
 	while (cont->sc_dtx_resyncing) {
 		if (!block) {
 			ABT_mutex_unlock(cont->sc_mutex);
@@ -462,6 +463,17 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		ABT_mutex_unlock(cont->sc_mutex);
 		goto out;
 	}
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
+		d_rank_t	myrank;
+
+		crt_group_rank(NULL, &myrank);
+		if (myrank == daos_fail_value_get()) {
+			dss_set_start_epoch();
+			vos_dtx_cache_reset(cont->sc_hdl);
+		}
+	}
+
 	cont->sc_dtx_resyncing = 1;
 	cont->sc_dtx_resync_ver = ver;
 	ABT_mutex_unlock(cont->sc_mutex);

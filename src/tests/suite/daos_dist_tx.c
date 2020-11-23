@@ -51,7 +51,7 @@ dtx_1(void **state)
 	struct ioreq	 req;
 	int		 i;
 
-	print_message("DTX with multiple SV updates against the same obj\n");
+	print_message("DTX1: multiple SV update against the same obj\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -90,7 +90,7 @@ dtx_2(void **state)
 	struct ioreq	 req;
 	int		 i;
 
-	print_message("DTX with multiple EV updates against the same obj\n");
+	print_message("DTX2: multiple EV update against the same obj\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -131,22 +131,22 @@ dtx_update_multiple_objs(test_arg_t *arg, daos_iod_type_t i_type,
 	char		*write_bufs[DTX_TEST_SUB_REQS];
 	char		*fetch_buf;
 	daos_handle_t	 th = { 0 };
-	daos_obj_id_t	 oid[DTX_TEST_SUB_REQS];
-	struct ioreq	 req[DTX_TEST_SUB_REQS];
+	daos_obj_id_t	 oids[DTX_TEST_SUB_REQS];
+	struct ioreq	 reqs[DTX_TEST_SUB_REQS];
 	int		 i;
 
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 	arg->async = 0;
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
-		oid[i] = dts_oid_gen(oclass, 0, arg->myrank);
-		ioreq_init(&req[i], arg->coh, oid[i], i_type, arg);
+		oids[i] = dts_oid_gen(oclass, 0, arg->myrank);
+		ioreq_init(&reqs[i], arg->coh, oids[i], i_type, arg);
 
 		D_ALLOC(write_bufs[i], size);
 		assert_non_null(write_bufs[i]);
 
 		dts_buf_render(write_bufs[i], size);
-		insert_single(dkey, akey, 0, write_bufs[i], size, th, &req[i]);
+		insert_single(dkey, akey, 0, write_bufs[i], size, th, &reqs[i]);
 	}
 
 	MUST(daos_tx_commit(th, NULL));
@@ -156,13 +156,13 @@ dtx_update_multiple_objs(test_arg_t *arg, daos_iod_type_t i_type,
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE,
-			      &req[i]);
+			      &reqs[i]);
 		assert_memory_equal(write_bufs[i], fetch_buf, size);
 	}
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		D_FREE(write_bufs[i]);
-		ioreq_fini(&req[i]);
+		ioreq_fini(&reqs[i]);
 	}
 	D_FREE(fetch_buf);
 	MUST(daos_tx_close(th, NULL));
@@ -171,14 +171,14 @@ dtx_update_multiple_objs(test_arg_t *arg, daos_iod_type_t i_type,
 static void
 dtx_3(void **state)
 {
-	print_message("Multiple small SV updates against multiple objs\n");
+	print_message("DTX3: Multiple small SV update against multiple objs\n");
 	dtx_update_multiple_objs(*state, DAOS_IOD_SINGLE, 1 << 6, OC_S1);
 }
 
 static void
 dtx_4(void **state)
 {
-	print_message("Multiple large EV updates against multiple objs\n");
+	print_message("DTX4: Multiple large EV update against multiple objs\n");
 	dtx_update_multiple_objs(*state, DAOS_IOD_ARRAY, 1 << 12, OC_S1);
 }
 
@@ -187,7 +187,7 @@ dtx_5(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	print_message("Multiple small SV updates against multiple EC objs\n");
+	print_message("DTX5: Multiple small SV update on multiple EC objs\n");
 
 	if (!test_runable(arg, 3))
 		skip();
@@ -200,7 +200,7 @@ dtx_6(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	print_message("Multiple large EV updates against multiple EC objs\n");
+	print_message("DTX6: Multiple large EV update on multiple EC objs\n");
 
 	if (!test_runable(arg, 3))
 		skip();
@@ -220,7 +220,7 @@ dtx_7(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	print_message("DTX with SV update plus punch\n");
+	print_message("DTX7: SV update plus punch\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -254,7 +254,7 @@ dtx_8(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	print_message("DTX with EV update plus punch\n");
+	print_message("DTX8: EV update plus punch\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -295,7 +295,7 @@ dtx_9(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	print_message("DTX with conditional insert/update\n");
+	print_message("DTX9: conditional insert/update\n");
 
 	arg->async = 0;
 	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
@@ -354,7 +354,7 @@ dtx_10(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	print_message("DTX with conditional punch\n");
+	print_message("DTX10: conditional punch\n");
 
 	arg->async = 0;
 	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
@@ -410,7 +410,7 @@ dtx_11(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	print_message("Read only transaction\n");
+	print_message("DTX11: read only transaction\n");
 
 	arg->async = 0;
 	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
@@ -458,7 +458,7 @@ dtx_12(void **state)
 	struct ioreq	 req;
 	int		 i;
 
-	print_message("DTX with zero copy flag\n");
+	print_message("DTX12: zero copy flag\n");
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -512,7 +512,7 @@ dtx_13(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
-	print_message("DTX status machnie\n");
+	print_message("DTX13: DTX status machnie\n");
 
 	arg->async = 0;
 	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
@@ -598,7 +598,7 @@ dtx_14(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
-	print_message("DTX restart because of conflict with others\n");
+	print_message("DTX14: restart because of conflict with others\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -657,7 +657,7 @@ dtx_15(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	print_message("DTX restart because of stale pool map\n");
+	print_message("DTX15: restart because of stale pool map\n");
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
 	arg->async = 0;
@@ -746,7 +746,7 @@ dtx_handle_resent(test_arg_t *arg, uint64_t fail_loc)
 static void
 dtx_16(void **state)
 {
-	print_message("Resend commit because of lost CPD request\n");
+	print_message("DTX16: resend commit because of lost CPD request\n");
 
 	/* DAOS_DTX_LOST_RPC_REQUEST will simulate the case of CPD RPC
 	 * request lost before being executed on the leader. Then the
@@ -759,7 +759,7 @@ dtx_16(void **state)
 static void
 dtx_17(void **state)
 {
-	print_message("Resend commit because of lost CPD reply\n");
+	print_message("DTX17: resend commit because of lost CPD reply\n");
 
 	/* DAOS_DTX_LOST_RPC_REPLY will simulate the case of CPD RPC
 	 * reply lost after being executed on the leader. Then the
@@ -782,7 +782,7 @@ dtx_18(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
-	print_message("Spread read time-stamp when commit\n");
+	print_message("DTX18: spread read time-stamp when commit\n");
 
 	if (!test_runable(arg, 3))
 		skip();
@@ -855,8 +855,8 @@ dtx_19(void **state)
 	char		*write_bufs[DTX_TEST_SUB_REQS];
 	char		*fetch_buf;
 	daos_handle_t	 th = { 0 };
-	daos_obj_id_t	 oid[DTX_TEST_SUB_REQS];
-	struct ioreq	 req[DTX_TEST_SUB_REQS];
+	daos_obj_id_t	 oids[DTX_TEST_SUB_REQS];
+	struct ioreq	 reqs[DTX_TEST_SUB_REQS];
 	uint32_t	 nr[DTX_TEST_SUB_REQS];
 	size_t		 size[DTX_TEST_SUB_REQS];
 	size_t		 max_size = 0;
@@ -864,7 +864,7 @@ dtx_19(void **state)
 	int		 i;
 	uint16_t	 oclass;
 
-	print_message("Misc rep and kinds of EC object updates in same TX.\n");
+	print_message("DTX19: misc rep and EC object update in same TX.\n");
 
 	if (!test_runable(arg, 4))
 		skip();
@@ -903,15 +903,15 @@ dtx_19(void **state)
 		if (max_size < size[i] * nr[i])
 			max_size = size[i] * nr[i];
 
-		oid[i] = dts_oid_gen(oclass, 0, arg->myrank);
-		ioreq_init(&req[i], arg->coh, oid[i], i_type, arg);
+		oids[i] = dts_oid_gen(oclass, 0, arg->myrank);
+		ioreq_init(&reqs[i], arg->coh, oids[i], i_type, arg);
 
 		D_ALLOC(write_bufs[i], size[i] * nr[i]);
 		assert_non_null(write_bufs[i]);
 
 		dts_buf_render(write_bufs[i], size[i] * nr[i]);
 		insert_single_with_rxnr(dkey, akey, i, write_bufs[i],
-					size[i], nr[i], th, &req[i]);
+					size[i], nr[i], th, &reqs[i]);
 	}
 
 	MUST(daos_tx_commit(th, NULL));
@@ -922,57 +922,1875 @@ dtx_19(void **state)
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		memset(fetch_buf, 0, max_size);
 		lookup_single_with_rxnr(dkey, akey, i, fetch_buf, size[i],
-					size[i] * nr[i], DAOS_TX_NONE, &req[i]);
+					size[i] * nr[i], DAOS_TX_NONE,
+					&reqs[i]);
 		assert_memory_equal(write_bufs[i], fetch_buf, size[i] * nr[i]);
 	}
 
 	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
 		D_FREE(write_bufs[i]);
-		ioreq_fini(&req[i]);
+		ioreq_fini(&reqs[i]);
 	}
 	D_FREE(fetch_buf);
 	MUST(daos_tx_close(th, NULL));
 }
 
+static void
+dtx_init_oid_req_akey(test_arg_t *arg, daos_obj_id_t *oids, struct ioreq *reqs,
+		      uint16_t *ocs, daos_iod_type_t *types, char *akeys[],
+		      int oid_req_cnt, int akey_cnt, uint8_t ofeats)
+{
+	int	i;
+
+	for (i = 0; i < oid_req_cnt; i++) {
+		oids[i] = dts_oid_gen(ocs[i], ofeats, arg->myrank);
+		ioreq_init(&reqs[i], arg->coh, oids[i], types[i], arg);
+	}
+
+	for (i = 0; i < akey_cnt; i++) {
+		D_ALLOC(akeys[i], 16);
+		assert_non_null(akeys[i]);
+		dts_buf_render(akeys[i], 16);
+	}
+}
+
+static void
+dtx_fini_req_akey(struct ioreq *reqs, char *akeys[],
+		  int req_cnt, int akey_cnt)
+{
+	int	i;
+
+	for (i = 0; i < req_cnt; i++)
+		ioreq_fini(&reqs[i]);
+
+	for (i = 0; i < akey_cnt; i++)
+		D_FREE(akeys[i]);
+}
+
+static void
+dtx_20(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey = dts_dtx_dkey;
+	const char	*akey = dts_dtx_akey;
+	char		*write_succ_bufs[2];
+	char		*write_fail_bufs[2];
+	char		*fetch_buf;
+	daos_handle_t	 th = { 0 };
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_SINGLE, DAOS_IOD_ARRAY };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
+	size_t		 size = (1 << 20) + 3;
+	int		 i;
+	int		 rc;
+
+	print_message("DTX20: atomicity - either all done or none done\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0, 0);
+
+	print_message("Successful transactional update\n");
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	for (i = 0; i < 2; i++) {
+		D_ALLOC(write_succ_bufs[i], size);
+		assert_non_null(write_succ_bufs[i]);
+
+		dts_buf_render(write_succ_bufs[i], size);
+		insert_single(dkey, akey, 0, write_succ_bufs[i], size, th,
+			      &reqs[i]);
+	}
+
+	MUST(daos_tx_commit(th, NULL));
+	MUST(daos_tx_close(th, NULL));
+
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+
+	print_message("Verify succeeful update result\n");
+
+	for (i = 0; i < 2; i++) {
+		lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE,
+			      &reqs[i]);
+		/* Both the two object should have been updated successfully. */
+		assert_memory_equal(write_succ_bufs[i], fetch_buf, size);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	/* Simulate the case of TX IO error, just one failure. */
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_FAIL_IO | DAOS_FAIL_ONCE,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Failed transactional update\n");
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	for (i = 0; i < 2; i++) {
+		D_ALLOC(write_fail_bufs[i], size - 1);
+		assert_non_null(write_fail_bufs[i]);
+
+		dts_buf_render(write_fail_bufs[i], size - 1);
+		insert_single(dkey, akey, 0, write_fail_bufs[i], size - 1, th,
+			      &reqs[i]);
+	}
+
+	rc = daos_tx_commit(th, NULL);
+	assert_int_equal(rc, -DER_IO);
+
+	MUST(daos_tx_close(th, NULL));
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Verify failed update result\n");
+
+	for (i = 0; i < 2; i++) {
+		lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE,
+			      &reqs[i]);
+		/* The 2nd update failed for one object, then none of the
+		 * objects are updated, so the data should be old value.
+		 */
+		assert_memory_equal(write_succ_bufs[i], fetch_buf, size);
+
+		D_FREE(write_succ_bufs[i]);
+		D_FREE(write_fail_bufs[i]);
+		ioreq_fini(&reqs[i]);
+	}
+
+	D_FREE(fetch_buf);
+}
+
+static void
+dtx_21(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*akey = dts_dtx_akey;
+	char		*dkey_bufs[DTX_TEST_SUB_REQS];
+	char		*write_bufs[DTX_TEST_SUB_REQS];
+	char		*fetch_buf;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	daos_iod_type_t	 type = DAOS_IOD_ARRAY;
+	uint16_t	 oc = OC_RP_2G2;
+	size_t		 size = 32;
+	int		 i;
+	int		 rc;
+
+	print_message("DTX21: TX atomicity - internal transaction.\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, &oid, &req, &oc, &type, NULL, 1, 0, 0);
+
+	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
+		D_ALLOC(dkey_bufs[i], 16);
+		assert_non_null(dkey_bufs[i]);
+		snprintf(dkey_bufs[i], 15, "%s_%d", dts_dtx_dkey, i);
+
+		D_ALLOC(write_bufs[i], size);
+		assert_non_null(write_bufs[i]);
+		dts_buf_render(write_bufs[i], size);
+
+		insert_single(dkey_bufs[i], akey, 0, write_bufs[i],
+			      size, DAOS_TX_NONE, &req);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	/* Simulate the case of TX IO error, just one failure. */
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_FAIL_IO | DAOS_FAIL_ONCE,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Failed punch firstly\n");
+
+	rc = daos_obj_punch(req.oh, DAOS_TX_NONE, 0, NULL);
+	assert_int_equal(rc, -DER_IO);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+
+	print_message("Verify failed punch result\n");
+
+	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
+		lookup_single(dkey_bufs[i], akey, 0, fetch_buf, size,
+			      DAOS_TX_NONE, &req);
+		/* Punch failed, all shards should be there. */
+		assert_memory_equal(write_bufs[i], fetch_buf, size);
+	}
+
+	print_message("Successful punch object\n");
+
+	MUST(daos_obj_punch(req.oh, DAOS_TX_NONE, 0, NULL));
+
+	print_message("Verify successful punch result\n");
+
+	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
+		/* Punch succeed, all shards should have been punched. */
+		req.arg->expect_result = -DER_NONEXIST;
+		lookup_empty_single(dkey_bufs[i], akey, 0, fetch_buf, size,
+				    DAOS_TX_NONE, &req);
+	}
+
+	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
+		D_FREE(dkey_bufs[i]);
+		D_FREE(write_bufs[i]);
+	}
+
+	D_FREE(fetch_buf);
+	ioreq_fini(&req);
+}
+
+static void
+dtx_share_oid(daos_obj_id_t *oid)
+{
+	int	rc;
+
+	rc = MPI_Bcast(&oid->lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	rc = MPI_Bcast(&oid->hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dtx_22(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey = dts_dtx_dkey;
+	const char	*akey = dts_dtx_akey;
+	daos_handle_t	 th = { 0 };
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	uint64_t	 vals[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_SINGLE, DAOS_IOD_ARRAY };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
+	int		 i, j, k;
+	int		 rc;
+
+	print_message("DTX22: TX isolation - invisible partial modification\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	if (arg->myrank == 0)
+		dtx_init_oid_req_akey(arg, oids, reqs, ocs, types,
+				      NULL, 2, 0, 0);
+
+	/* All ranks share the same two objects. */
+	for (i = 0; i < 2; i++)
+		dtx_share_oid(&oids[i]);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	/* Generate the base object and value via rank0. */
+	if (arg->myrank == 0) {
+		daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+		for (i = 0; i < 2; i++) {
+			vals[i] = 1;
+			insert_single(dkey, akey, 0, &vals[i], sizeof(vals[i]),
+				      DAOS_TX_NONE, &reqs[i]);
+		}
+		daos_fail_loc_set(0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (j = 100; j < 1000; j++) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+restart:
+		for (i = 0; i < 2; i++) {
+			reqs[i].arg->not_check_result = true;
+			lookup_empty_single(dkey, akey, 0, &vals[i],
+					    sizeof(vals[i]), th, &reqs[i]);
+			if (reqs[i].result == -DER_TX_RESTART) {
+				MUST(daos_tx_restart(th, NULL));
+				goto restart;
+			}
+
+			if (reqs[i].result == -DER_NONEXIST)
+				vals[i] = 0;
+			else
+				assert_int_equal(reqs[i].result, 0);
+			reqs[i].arg->not_check_result = false;
+		}
+
+		/* The two values must be the same, otherwise,
+		 * some TX internal status is visible to others.
+		 */
+		assert_int_equal(vals[0], vals[1]);
+
+		k = j % 2;
+		if (j % 10 == arg->myrank) {
+			MUST(daos_obj_punch(reqs[k].oh, th, 0, NULL));
+			MUST(daos_obj_punch(reqs[1 - k].oh, th, 0, NULL));
+		} else {
+			vals[0] = vals[1] = (arg->myrank << 31) + j;
+			insert_single(dkey, akey, 0, &vals[k],
+				      sizeof(vals[k]), th, &reqs[k]);
+			insert_single(dkey, akey, 0, &vals[1 - k],
+				      sizeof(vals[1 - k]), th, &reqs[1 - k]);
+		}
+
+		rc = daos_tx_commit(th, NULL);
+		if (rc == -DER_TX_RESTART) {
+			print_message("Handle TX restart %d\n", arg->myrank);
+
+			MUST(daos_tx_restart(th, NULL));
+
+			goto restart;
+		}
+
+		assert_int_equal(rc, 0);
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	dtx_fini_req_akey(reqs, NULL, 2, 0);
+}
+
+static void
+dtx_23(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey = dts_dtx_dkey;
+	const char	*akey = dts_dtx_akey;
+	daos_handle_t	 th = { 0 };
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
+	uint32_t	 vals[2];
+	int		 rc;
+	bool		 once = false;
+
+	print_message("DTX23: server start epoch - refuse TX with old epoch\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	insert_single(dkey, akey, 0, &vals[0], sizeof(vals[0]),
+		      DAOS_TX_NONE, &reqs[0]);
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_START_EPOCH | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+restart:
+	/* It will get a stale epoch from server if set DAOS_DTX_START_EPOCH. */
+	lookup_single(dkey, akey, 0, &vals[1], sizeof(vals[1]), th, &reqs[0]);
+
+	assert_int_equal(vals[0], vals[1]);
+
+	insert_single(dkey, akey, 0, &vals[1], sizeof(vals[1]), th, &reqs[1]);
+
+	rc = daos_tx_commit(th, NULL);
+	if (once) {
+		assert_int_equal(rc, 0);
+	} else {
+		once = true;
+		assert_int_equal(rc, -DER_TX_RESTART);
+
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (arg->myrank == 0)
+			daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					     0, 0, NULL);
+		MPI_Barrier(MPI_COMM_WORLD);
+
+		print_message("Handle TX restart %d\n", arg->myrank);
+
+		MUST(daos_tx_restart(th, NULL));
+
+		goto restart;
+	}
+
+	MUST(daos_tx_close(th, NULL));
+
+	dtx_fini_req_akey(reqs, NULL, 2, 0);
+}
+
+static void
+dtx_24(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey1 = "dtx_dkey_1";
+	const char	*dkey2 = "dtx_dkey_2";
+	const char	*akey = dts_dtx_akey;
+	daos_handle_t	 th = { 0 };
+	daos_obj_id_t	 oids[10];
+	struct ioreq	 reqs[10];
+	uint32_t	 val;
+	int		 i;
+
+	print_message("DTX24: async batched commit\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	print_message("Transactional update something\n");
+
+	for (i = 0, val = 0; i < 10; i++, val++) {
+		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		insert_single(dkey1, akey, 0, &val, sizeof(val), th, &reqs[i]);
+		insert_single(dkey2, akey, 0, &val, sizeof(val), th, &reqs[i]);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_NO_UNCERTAINTY | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Sleep %d seconds for the batched commit...\n",
+		      DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	/* Sleep one batched commit interval to guarantee that all async TXs
+	 * have been committed.
+	 */
+	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	for (i = 0; i < 10; i++) {
+		lookup_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		assert_int_equal(val, i);
+
+		lookup_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		assert_int_equal(val, i);
+
+		ioreq_fini(&reqs[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+#define DTX_NC_CNT	100
+
+static void
+dtx_25(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey1 = "dtx_dkey_1";
+	const char	*dkey2 = "dtx_dkey_2";
+	const char	*akey = dts_dtx_akey;
+	daos_handle_t	 th = { 0 };
+	daos_obj_id_t	 oids[DTX_NC_CNT];
+	struct ioreq	 reqs[DTX_NC_CNT];
+	uint32_t	 val;
+	int		 i;
+
+	print_message("DTX25: uncertainty check - committable\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_NO_BATCHED_CMT | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Transactional update without batched commit\n");
+
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
+		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		/* Base value: i + 1 */
+		insert_single(dkey1, akey, 0, &val, sizeof(val), th, &reqs[i]);
+		insert_single(dkey2, akey, 0, &val, sizeof(val), th, &reqs[i]);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	print_message("Verify update result without batched commit\n");
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		/* Async batched commit is disabled, so if fetch hit
+		 * 'prepared' DTX on non-leader, it needs to resolve
+		 * the uncertainty via dtx_refresh with leader.
+		 */
+		lookup_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		assert_int_equal(val, i + 1);
+
+		lookup_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		assert_int_equal(val, i + 1);
+
+		ioreq_fini(&reqs[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dtx_26(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey1 = "dtx_dkey_1";
+	const char	*dkey2 = "dtx_dkey_2";
+	const char	*akey = dts_dtx_akey;
+	daos_handle_t	 th = { 0 };
+	daos_obj_id_t	 oids[DTX_NC_CNT];
+	struct ioreq	 reqs[DTX_NC_CNT];
+	uint32_t	 val;
+	int		 i;
+
+	print_message("DTX26: uncertainty check - non-committable\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
+		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+
+		/* Base value: i + 1 */
+		insert_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		insert_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_NO_COMMITTABLE | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("More transactional update without mark committable\n");
+
+	for (i = 0, val = 21; i < DTX_NC_CNT; i++, val++) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		/* New value: i + 21 */
+		insert_single(dkey1, akey, 0, &val, sizeof(val), th, &reqs[i]);
+		insert_single(dkey2, akey, 0, &val, sizeof(val), th, &reqs[i]);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	print_message("Verify update result without mark committable\n");
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		 /* Inject fail_loc to simulate the case of non-committable.
+		  * So the DTX with 'prepared' status will not be committed,
+		  * and will be regarded as not ready, then become invisible
+		  * for other fetch operation. Then fetch will get old value.
+		  */
+		lookup_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		assert_int_equal(val, i + 1);
+
+		lookup_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		assert_int_equal(val, i + 1);
+
+		ioreq_fini(&reqs[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
+{
+	const char	*dkey1 = "dtx_dkey_1";
+	const char	*dkey2 = "dtx_dkey_2";
+	const char	*akey = dts_dtx_akey;
+	daos_handle_t	 th = { 0 };
+	daos_obj_id_t	 oids[DTX_NC_CNT];
+	struct ioreq	 reqs[DTX_NC_CNT];
+	uint32_t	 val;
+	int		 i;
+	int		 rc;
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
+		oids[i] = dts_oid_gen(OC_RP_2G2, 0, arg->myrank);
+		ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+
+		/* Base value: i + 1 */
+		insert_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		insert_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     loc | DAOS_FAIL_ALWAYS, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Transactional update with loc %lx\n", loc);
+
+	for (i = 0, val = 21; i < DTX_NC_CNT; i++, val++) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		/* New value: i + 21 */
+		insert_single(dkey1, akey, 0, &val, sizeof(val), th, &reqs[i]);
+		insert_single(dkey2, akey, 0, &val, sizeof(val), th, &reqs[i]);
+
+		rc = daos_tx_commit(th, NULL);
+		if (abort)
+			assert_int_equal(rc, -DER_IO);
+		else
+			assert_int_equal(rc, 0);
+
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	print_message("Verify transactional update result with loc %lx\n", loc);
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		lookup_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		if (abort)
+			assert_int_equal(val, i + 1);
+		else
+			assert_int_equal(val, i + 21);
+
+		lookup_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
+			      &reqs[i]);
+		if (abort)
+			assert_int_equal(val, i + 1);
+		else
+			assert_int_equal(val, i + 21);
+
+		ioreq_fini(&reqs[i]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dtx_27(void **state)
+{
+	print_message("DTX27: uncertainty check - miss commit\n");
+
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_COMMIT, true);
+}
+
+static void
+dtx_28(void **state)
+{
+	print_message("DTX28: uncertainty check - miss abort\n");
+
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, false);
+}
+
+static void
+dtx_inject_commit_fail(test_arg_t *arg, int idx)
+{
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		if (idx % 2 == 1)
+			daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					     DAOS_DTX_MISS_ABORT |
+					     DAOS_FAIL_ALWAYS, 0, NULL);
+		else
+			daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					     DAOS_DTX_MISS_COMMIT |
+					     DAOS_FAIL_ALWAYS, 0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dtx_generate_layout(test_arg_t *arg, const char *dkey1, const char *dkey2,
+		    char **akeys, struct ioreq *reqs, int count,
+		    bool base_only, bool inject_fail)
+{
+	daos_handle_t	 th = { 0 };
+	uint64_t	 val;
+	int		 i, j;
+	int		 rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Non-transactional update for base layout\n");
+
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
+		/* Base value: i + 1 */
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[0]);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[0]);
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[1]);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[1]);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (base_only)
+		return;
+
+	print_message("More transactional %s fail loc\n",
+		      inject_fail ? "with" : "without");
+
+	for (j = 0; j < 2; j++) {
+		for (i = 1, val = 21; i < DTX_NC_CNT;
+		     i++, val++) {
+			if (inject_fail)
+				dtx_inject_commit_fail(arg, i);
+
+			MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+			/* New value: i + 21 */
+			insert_single(dkey1, akeys[i], 0, &val, sizeof(val), th,
+				      &reqs[j]);
+			insert_single(dkey2, akeys[i], 0, &val, sizeof(val), th,
+				      &reqs[1 - j]);
+
+			rc = daos_tx_commit(th, NULL);
+			if (i % 2 == 1 && inject_fail)
+				assert_int_equal(rc, -DER_IO);
+			else
+				assert_int_equal(rc, 0);
+
+			MUST(daos_tx_close(th, NULL));
+		}
+	}
+
+	if (inject_fail) {
+		MPI_Barrier(MPI_COMM_WORLD);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+}
+
+static void
+dtx_29(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey1 = "dtx_dkey_1";
+	const char	*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	uint64_t	 data[DTX_NC_CNT] = { 0 };
+	daos_off_t	 offsets[DTX_NC_CNT];
+	daos_size_t	 rec_sizes[DTX_NC_CNT];
+	daos_size_t	 data_sizes[DTX_NC_CNT];
+	uint64_t	*data_addrs[DTX_NC_CNT];
+	int		 i;
+
+	print_message("DTX29: uncertainty check - fetch re-entry\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
+			      DTX_NC_CNT, 0);
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		offsets[i] = 0;
+		rec_sizes[i] = sizeof(uint64_t);
+		data_sizes[i] = sizeof(uint64_t);
+		data_addrs[i] = &data[i];
+	}
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, false, true);
+
+	for (i = 0; i < DTX_NC_CNT; i += IOREQ_SG_IOD_NR) {
+		lookup(dkey1, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
+		       offsets + i, rec_sizes + i, (void **)&data_addrs[i],
+		       data_sizes + i, DAOS_TX_NONE, &reqs[0], false);
+		lookup(dkey2, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
+		       offsets + i, rec_sizes + i, (void **)&data_addrs[i],
+		       data_sizes + i, DAOS_TX_NONE, &reqs[1], false);
+	}
+
+	assert_int_equal(data[0], 1);
+	for (i = 1; i < DTX_NC_CNT; i++)
+		assert_int_equal(data[i], i + 21);
+
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
+}
+
+static int
+dtx_enum_parse_akey(char *str, int len, int base)
+{
+	int	val = 0;
+	int	i;
+
+	for (i = 0; i < len; i++) {
+		if (str[i] < '0' || str[i] > '9')
+			return -1;
+
+		val = val * 10 + str[i] - '0';
+	}
+
+	return val - base;
+}
+
+static int
+dtx_enum_verify_akeys(char *buf, daos_key_desc_t *kds, int num, int base)
+{
+	int	trace[DTX_NC_CNT * 2];
+	int	idx;
+	int	i;
+
+	/* "trace[i] == 1" means that related akey should exist.
+	 * "trace[i] == 0" means that related akey should not exist.
+	 */
+	for (i = 0; i < DTX_NC_CNT; i++)
+		trace[i] = 1;
+	for (i = DTX_NC_CNT;
+	     i < DTX_NC_CNT * 2;
+	     i += 2)
+		trace[i] = 1;
+	for (i = DTX_NC_CNT + 1;
+	     i < DTX_NC_CNT * 2;
+	     i += 2)
+		trace[i] = 0;
+
+	for (i = 0; i < num; buf += kds[i++].kd_key_len) {
+		idx = dtx_enum_parse_akey(buf, kds[i].kd_key_len, base);
+		if (idx < 0 || idx >= DTX_NC_CNT * 2) {
+			fprintf(stderr, "Enumeration got invalid akey %.*s\n",
+				(int)kds[i].kd_key_len, buf);
+			return -1;
+		}
+
+		if (trace[idx] == 0) {
+			fprintf(stderr, "Akey %.*s should not exist\n",
+				(int)kds[i].kd_key_len, buf);
+			return -1;
+		}
+
+		if (trace[idx] > 1) {
+			fprintf(stderr, "Akey %.*s is packed repeatedly\n",
+				(int)kds[i].kd_key_len, buf);
+			return -1;
+		}
+
+		trace[idx]++;
+	}
+
+	return 0;
+}
+
+static void
+dtx_30(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "dtx_dkey_1";
+	char		*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT * 2];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	int		 base = 10000;
+	int		 akey_size = 8;
+	daos_size_t	 buf_len = DTX_NC_CNT * 2 * akey_size;
+	char		 buf[buf_len];
+	daos_key_desc_t  kds[DTX_NC_CNT];
+	daos_anchor_t	 anchor;
+	daos_handle_t	 th = { 0 };
+	uint64_t	 val;
+	uint32_t	 num;
+	int		 rc;
+	int		 i;
+
+	print_message("DTX30: uncertainty check - enumeration re-entry\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0, 0);
+
+	for (i = 0; i < DTX_NC_CNT * 2; i++) {
+		D_ALLOC(akeys[i], akey_size);
+		assert_non_null(akeys[i]);
+		snprintf(akeys[i], akey_size - 1, "%d", i + base);
+	}
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, true, true);
+
+	for (i = DTX_NC_CNT, val = 31;
+	     i < DTX_NC_CNT * 2; i++, val++) {
+		dtx_inject_commit_fail(arg, i);
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		/* New value: i + 31 */
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val), th,
+			      &reqs[0]);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val), th,
+			      &reqs[0]);
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val), th,
+			      &reqs[1]);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val), th,
+			      &reqs[1]);
+
+		rc = daos_tx_commit(th, NULL);
+		if (i % 2 == 1)
+			assert_int_equal(rc, -DER_IO);
+		else
+			assert_int_equal(rc, 0);
+
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Transactional enumerate to verify update result\n");
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	num = DTX_NC_CNT * 2;
+	memset(&anchor, 0, sizeof(anchor));
+	memset(buf, 0, buf_len);
+
+	MUST(enumerate_akey(th, dkey1, &num, kds, &anchor, buf, buf_len,
+			    &reqs[0]));
+	assert_int_equal(num, DTX_NC_CNT +
+			 DTX_NC_CNT / 2);
+
+	MUST(daos_tx_commit(th, NULL));
+	MUST(daos_tx_close(th, NULL));
+
+	MUST(dtx_enum_verify_akeys(buf, kds, num, base));
+
+	print_message("Non-transactional enumerate to verify update result\n");
+
+	num = DTX_NC_CNT * 2;
+	memset(&anchor, 0, sizeof(anchor));
+	memset(buf, 0, buf_len);
+
+	MUST(enumerate_akey(DAOS_TX_NONE, dkey2, &num, kds, &anchor, buf,
+			    buf_len, &reqs[1]));
+	assert_int_equal(num, DTX_NC_CNT +
+			 DTX_NC_CNT / 2);
+
+	MUST(dtx_enum_verify_akeys(buf, kds, num, base));
+
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT * 2);
+}
+
+static void
+dtx_31(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey1 = "dtx_dkey_1";
+	const char	*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	uint64_t	 data[DTX_NC_CNT] = { 0 };
+	int		 rx_nr[DTX_NC_CNT];
+	daos_off_t	 offsets[DTX_NC_CNT];
+	daos_size_t	 rec_sizes[DTX_NC_CNT];
+	uint64_t	*data_addrs[DTX_NC_CNT];
+	uint64_t	 val;
+	int		 i;
+
+	print_message("DTX31: uncertainty check - update re-entry\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
+			      DTX_NC_CNT, 0);
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		rx_nr[i] = 1;
+		offsets[i] = 0;
+		rec_sizes[i] = sizeof(uint64_t);
+		data_addrs[i] = &data[i];
+	}
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, false, true);
+
+	for (i = 0, val = 31; i < DTX_NC_CNT; i++, val++)
+		data[i] = val;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0; i < DTX_NC_CNT; i += IOREQ_SG_IOD_NR) {
+		insert(dkey1, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
+		       rec_sizes + i, rx_nr + i, offsets + i,
+		       (void **)&data_addrs[i], DAOS_TX_NONE, &reqs[0], 0);
+		insert(dkey2, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
+		       rec_sizes + i, rx_nr + i, offsets + i,
+		       (void **)&data_addrs[i], DAOS_TX_NONE, &reqs[1], 0);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		lookup_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[0]);
+		assert_int_equal(val, i + 21);
+
+		lookup_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[1]);
+		assert_int_equal(val, i + 21);
+	}
+
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
+}
+
+static void
+dtx_32(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "dtx_dkey_1";
+	char		*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_key_t	 api_dkey1;
+	daos_key_t	 api_dkey2;
+	daos_key_t	 api_akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	uint64_t	 val;
+	int		 i;
+
+	print_message("DTX32: uncertainty check - punch re-entry\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
+			      DTX_NC_CNT, 0);
+
+	d_iov_set(&api_dkey1, dkey1, strlen(dkey1));
+	d_iov_set(&api_dkey2, dkey2, strlen(dkey2));
+
+	for (i = 0; i < DTX_NC_CNT; i++)
+		d_iov_set(&api_akeys[i], akeys[i], strlen(akeys[i]));
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, false, true);
+
+	MUST(daos_obj_punch_akeys(reqs[0].oh, DAOS_TX_NONE, 0, &api_dkey1,
+				  DTX_NC_CNT, api_akeys, NULL));
+	MUST(daos_obj_punch_akeys(reqs[1].oh, DAOS_TX_NONE, 0, &api_dkey2,
+				  DTX_NC_CNT, api_akeys, NULL));
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		reqs[0].arg->expect_result = -DER_NONEXIST;
+		lookup_empty_single(dkey1, akeys[i], 0, &val, sizeof(val),
+				    DAOS_TX_NONE, &reqs[0]);
+
+		reqs[1].arg->expect_result = -DER_NONEXIST;
+		lookup_empty_single(dkey2, akeys[i], 0, &val, sizeof(val),
+				    DAOS_TX_NONE, &reqs[1]);
+	}
+
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
+}
+
+static void
+dtx_33(void **state)
+{
+	test_arg_t	*arg = *state;
+	uint64_t	 dkeys[2];
+	uint64_t	 akeys[DTX_NC_CNT];
+	daos_key_t	 api_dkey1;
+	daos_key_t	 api_dkey2;
+	daos_key_t	 api_akey;
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_handle_t	 th = { 0 };
+	daos_iod_t	 iod = { 0 };
+	d_sg_list_t	 sgl = { 0 };
+	daos_recx_t	 recx = { 0 };
+	d_iov_t		 val_iov;
+	uint64_t	 val;
+	int		 i, j;
+	int		 rc;
+
+	print_message("DTX33: uncertainty check - query key re-entry\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0,
+			      DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64);
+
+	for (i = 0; i < 2; i++) {
+		dkeys[i] = 1 + i * 10;
+		d_iov_set(&api_dkey1, &dkeys[i], sizeof(uint64_t));
+	}
+
+	for (i = 0; i < DTX_NC_CNT; i++)
+		akeys[i] = 2 + i * 100;
+
+	d_iov_set(&api_akey, &akeys[0], sizeof(uint64_t));
+	d_iov_set(&val_iov, &val, sizeof(val));
+
+	recx.rx_nr = 1;
+	sgl.sg_iovs = &val_iov;
+	sgl.sg_nr = 1;
+	iod.iod_size = sizeof(uint64_t);
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+
+	for (j = 0; j < 2; j++) {
+		for (i = 0, val = 1000; i < DTX_NC_CNT;
+		     i++, val += 10) {
+			dtx_inject_commit_fail(arg, i);
+
+			MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+			recx.rx_idx = 3 + i * 1000;
+			d_iov_set(&iod.iod_name, &akeys[i], sizeof(uint64_t));
+			if (j == 0)
+				iod.iod_type = DAOS_IOD_ARRAY;
+			else
+				iod.iod_type = DAOS_IOD_SINGLE;
+
+			MUST(daos_obj_update(reqs[j].oh, th, 0, &api_dkey1,
+					     1, &iod, &sgl, NULL));
+			MUST(daos_obj_update(reqs[1 - j].oh, th, 0, &api_dkey2,
+					     1, &iod, &sgl, NULL));
+
+			rc = daos_tx_commit(th, NULL);
+			if (i % 2 == 1)
+				assert_int_equal(rc, -DER_IO);
+			else
+				assert_int_equal(rc, 0);
+
+			MUST(daos_tx_close(th, NULL));
+		}
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Query the max recx on obj1\n");
+
+	MUST(daos_obj_query_key(reqs[0].oh, DAOS_TX_NONE, DAOS_GET_DKEY |
+				DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX,
+				&api_dkey1, &api_akey, &recx, NULL));
+	assert_int_equal(dkeys[0], 11);
+	assert_int_equal(akeys[0], 802);
+	assert_int_equal(recx.rx_idx, 8003);
+	assert_int_equal(recx.rx_nr, 1);
+
+	print_message("Query the min akey on obj2\n");
+
+	MUST(daos_obj_query_key(reqs[1].oh, DAOS_TX_NONE, DAOS_GET_DKEY |
+				DAOS_GET_AKEY | DAOS_GET_MIN,
+				&api_dkey1, &api_akey, NULL, NULL));
+	assert_int_equal(dkeys[0], 1);
+	assert_int_equal(akeys[0], 2);
+
+	dtx_fini_req_akey(reqs, NULL, 2, 0);
+}
+
+static void
+dtx_34(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "dtx_dkey_1";
+	char		*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_key_t	 api_dkey1;
+	daos_key_t	 api_dkey2;
+	daos_key_t	 api_akeys[DTX_NC_CNT];
+	uint64_t	 data[DTX_NC_CNT] = { 0 };
+	int		 rx_nr[DTX_NC_CNT];
+	daos_off_t	 offsets[DTX_NC_CNT];
+	daos_size_t	 rec_sizes[DTX_NC_CNT];
+	uint64_t	*data_addrs[DTX_NC_CNT];
+	daos_handle_t	 th = { 0 };
+	uint64_t	 val;
+	int		 rc;
+	int		 i;
+
+	print_message("DTX34: uncertainty check - CPD RPC handler re-entry\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
+			      DTX_NC_CNT, 0);
+
+	d_iov_set(&api_dkey1, dkey1, strlen(dkey1));
+	d_iov_set(&api_dkey2, dkey2, strlen(dkey2));
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		d_iov_set(&api_akeys[i], akeys[i], strlen(akeys[i]));
+
+		rx_nr[i] = 1;
+		offsets[i] = 0;
+		rec_sizes[i] = sizeof(uint64_t);
+		data_addrs[i] = &data[i];
+	}
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, false, true);
+
+	for (i = 0, val = 31; i < DTX_NC_CNT; i++, val++)
+		data[i] = val;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0; i < DTX_NC_CNT; i += IOREQ_SG_IOD_NR) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		insert(dkey1, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
+		       rec_sizes + i, rx_nr + i, offsets + i,
+		       (void **)&data_addrs[i], th, &reqs[0], 0);
+
+		rc = daos_obj_punch_akeys(reqs[0].oh, th, 0, &api_dkey2,
+					  IOREQ_SG_IOD_NR, api_akeys + i, NULL);
+		assert_int_equal(rc, 0);
+
+		insert(dkey1, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
+		       rec_sizes + i, rx_nr + i, offsets + i,
+		       (void **)&data_addrs[i], th, &reqs[1], 0);
+
+		rc = daos_obj_punch_akeys(reqs[1].oh, th, 0, &api_dkey2,
+					  IOREQ_SG_IOD_NR, api_akeys + i, NULL);
+		assert_int_equal(rc, 0);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		lookup_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[0]);
+		assert_int_equal(val, i + 31);
+
+		reqs[1].arg->expect_result = -DER_NONEXIST;
+		lookup_empty_single(dkey2, akeys[i], 0, &val, sizeof(val),
+				    DAOS_TX_NONE, &reqs[1]);
+	}
+
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
+}
+
+static void
+dtx_35(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "dtx_dkey_1";
+	char		*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	uint64_t	 val;
+	int		 i;
+
+	print_message("DTX35: resync during reopen container\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
+			      DTX_NC_CNT, 0);
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, false, false);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("closing object\n");
+	MUST(daos_obj_close(reqs[0].oh, NULL));
+	MUST(daos_obj_close(reqs[1].oh, NULL));
+
+	print_message("closing container\n");
+	MUST(daos_cont_close(arg->coh, NULL));
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		print_message("reopening container to trigger DTX resync\n");
+		MUST(daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+				    &arg->coh, &arg->co_info, NULL));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("share container\n");
+	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
+
+	print_message("reopening object\n");
+	MUST(daos_obj_open(arg->coh, oids[0], 0, &reqs[0].oh, NULL));
+	MUST(daos_obj_open(arg->coh, oids[1], 0, &reqs[1].oh, NULL));
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_NO_UNCERTAINTY | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Sleep 3 seconds, all possible DTX resync should have been done. */
+	sleep(3);
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		lookup_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[0]);
+		assert_int_equal(val, i + 21);
+
+		lookup_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[1]);
+		assert_int_equal(val, i + 21);
+	}
+
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static d_rank_t
+dtx_get_restart_rank(d_rank_t *w_ranks, d_rank_t *r_ranks, int wcnt, int rcnt)
+{
+	int	i, j;
+	bool	same = false;
+
+	for (i = 0; i < rcnt; i++) {
+		for (j = 0; j < wcnt; j++) {
+			if (r_ranks[i] == w_ranks[j]) {
+				same = true;
+				break;
+			}
+		}
+
+		if (!same)
+			return r_ranks[i];
+	}
+
+	return CRT_NO_RANK;
+}
+
+static void
+dtx_36(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "dtx_dkey_1";
+	char		*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	uint64_t	 vals[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_RP_3G2, OC_RP_3G1 };
+	daos_handle_t	 th = { 0 };
+	d_rank_t	 w_ranks[3];
+	d_rank_t	 r_ranks[6];
+	d_rank_t	 kill_rank;
+	d_rank_t	 restart_rank;
+	int		 i;
+
+	print_message("DTX36: resync - DTX entry for read only ops\n");
+
+	if (!test_runable(arg, 7))
+		skip();
+
+	/* Obj1 has more redundancy groups than obj2. If the TX reads from
+	 * multiple redundancy groups of obj1 and only writes to obj2, then
+	 * there must be some servers that only contains read only operation.
+	 */
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
+			      DTX_NC_CNT, 0);
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, true, false);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		/* "fail_loc = DAOS_DTX_SKIP_PREPARE and fail_val = -1" on
+		 * server will prevent batched commit, but normally dispatch
+		 * sub-requests to related non-leaders.
+		 */
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				     -1, 0, NULL);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_SKIP_PREPARE | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	}
+	daos_fail_loc_set(DAOS_DTX_SPEC_LEADER | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Generating TXs with read only ops on some server...\n");
+
+	for (i = 0, vals[1] = 31; i < DTX_NC_CNT; i++, vals[1]++) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		lookup_single(dkey1, akeys[i], 0, &vals[0], sizeof(vals[0]),
+			      th, &reqs[0]);
+
+		insert_single(dkey1, akeys[i], 0, &vals[1], sizeof(vals[1]),
+			      th, &reqs[1]);
+
+		lookup_single(dkey2, akeys[i], 0, &vals[0], sizeof(vals[0]),
+			      th, &reqs[0]);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		for (i = 0; i < 3; i++)
+			w_ranks[i] = get_rank_by_oid_shard(arg, oids[1], i);
+
+		for (i = 0; i < 6; i++)
+			r_ranks[i] = get_rank_by_oid_shard(arg, oids[0], i);
+
+		restart_rank = dtx_get_restart_rank(w_ranks, r_ranks, 3, 6);
+		print_message("Restart rank %d when rebuild\n", restart_rank);
+
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_SRV_RESTART | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				     restart_rank, 0, NULL);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	kill_rank = get_rank_by_oid_shard(arg, oids[1], 0);
+	print_message("Exclude rank %d to trigger rebuild\n", kill_rank);
+	rebuild_single_pool_rank(arg, kill_rank, false);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				     0, 0, NULL);
+	}
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Verifying data after rebuild...\n");
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		lookup_single(dkey2, akeys[i], 0, &vals[0], sizeof(vals[0]),
+			      DAOS_TX_NONE, &reqs[0]);
+		assert_int_equal(vals[0], i + 1);
+
+		lookup_single(dkey1, akeys[i], 0, &vals[0], sizeof(vals[0]),
+			      DAOS_TX_NONE, &reqs[1]);
+		assert_int_equal(vals[0], i + 31);
+	}
+
+	reintegrate_single_pool_rank(arg, kill_rank);
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
+}
+
+static void
+dtx_37(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "dtx_dkey_1";
+	char		*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oids[2];
+	struct ioreq	 reqs[2];
+	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
+	uint16_t	 ocs[2] = { OC_RP_3G2, OC_S1 };
+	uint64_t	 val;
+	daos_handle_t	 th = { 0 };
+	d_rank_t	 kill_ranks[2];
+	int		 i;
+
+	print_message("DTX37: resync - lost whole redundancy groups\n");
+
+	if (!test_runable(arg, 7))
+		skip();
+
+	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
+			      DTX_NC_CNT, 0);
+
+	dtx_generate_layout(arg, dkey1, dkey2, akeys, reqs,
+			    DTX_NC_CNT, true, false);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		/* "fail_loc = DAOS_DTX_SKIP_PREPARE and fail_val = -1" on
+		 * server will prevent batched commit, but normally dispatch
+		 * sub-requests to related non-leaders.
+		 */
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				     -1, 0, NULL);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_SKIP_PREPARE | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	}
+	daos_fail_loc_set(DAOS_DTX_SPEC_LEADER | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Generating TXs with specified leader...\n");
+
+	for (i = 0, val = 31; i < DTX_NC_CNT; i++, val++) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      th, &reqs[0]);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      th, &reqs[1]);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      th, &reqs[0]);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	kill_ranks[0] = get_rank_by_oid_shard(arg, oids[0], 0);
+	kill_ranks[1] = get_rank_by_oid_shard(arg, oids[1], 0);
+	if (kill_ranks[0] == kill_ranks[1]) {
+		print_message("Exclude rank %d to trigger rebuild\n",
+			      kill_ranks[0]);
+		rebuild_single_pool_rank(arg, kill_ranks[0], false);
+	} else {
+		print_message("Exclude two ranks %d/%d to trigger rebuild\n",
+			      kill_ranks[0], kill_ranks[1]);
+		rebuild_pools_ranks(&arg, 1, kill_ranks, 2, false);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				     0, 0, NULL);
+	}
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Verifying data after rebuild...\n");
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		reqs[0].arg->expect_result = -DER_DATA_LOSS;
+		lookup_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[0]);
+		lookup_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[0]);
+
+		reqs[1].arg->expect_result = -DER_DATA_LOSS;
+		lookup_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &reqs[1]);
+	}
+
+	if (kill_ranks[0] == kill_ranks[1])
+		reintegrate_single_pool_rank(arg, kill_ranks[0]);
+	else
+		reintegrate_pools_ranks(&arg, 1, kill_ranks, 2);
+	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
+}
+
+static void
+dtx_38(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*dkey1 = "dtx_dkey_1";
+	char		*dkey2 = "dtx_dkey_2";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	uint64_t	 val;
+	daos_iod_type_t	 type = DAOS_IOD_SINGLE;
+	uint16_t	 oc = OC_RP_3G2;
+	daos_handle_t	 th = { 0 };
+	d_rank_t	 kill_rank;
+	int		 i;
+
+	print_message("DTX38: resync - leader failed during prepare\n");
+
+	if (!test_runable(arg, 7))
+		skip();
+
+	dtx_init_oid_req_akey(arg, &oid, &req, &oc, &type, akeys, 1,
+			      DTX_NC_CNT, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Non-transactional update for base layout\n");
+
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++) {
+		/* Base value: i + 1 */
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &req);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &req);
+	}
+
+	print_message("Generating some TXs to be committed...\n");
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_NO_BATCHED_CMT | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	daos_fail_loc_set(DAOS_DTX_SPEC_LEADER | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0, val = 31; i < DTX_NC_CNT; i += 2, val += 2) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val), th, &req);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val), th, &req);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	print_message("Generating some TXs to be aborted...\n");
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				     4, 0, NULL); /* Skip shard 4 */
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_DTX_SKIP_PREPARE | DAOS_FAIL_ALWAYS,
+				     0, NULL);
+	}
+	daos_fail_loc_set(DAOS_DTX_SPEC_LEADER | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 1, val = 101; i < DTX_NC_CNT; i += 2, val += 2) {
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val), th, &req);
+		insert_single(dkey2, akeys[i], 0, &val, sizeof(val), th, &req);
+
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_close(th, NULL));
+	}
+
+	kill_rank = get_rank_by_oid_shard(arg, oid, 0);
+	print_message("Exclude rank %d to trigger rebuild\n", kill_rank);
+	rebuild_single_pool_rank(arg, kill_rank, false);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				     0, 0, NULL);
+	}
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Verifying data after rebuild...\n");
+
+	for (i = 0, val = 0; i < DTX_NC_CNT; i++, val = 0) {
+		/* Full prepared TXs (i % 2 == 0) should has been
+		 * committed by DTX resync, then the value should
+		 * be new one.
+		 * Partially prepared TXs should has been aborted
+		 * during DTX resync, so the value should old one.
+		 */
+		lookup_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &req);
+		if (i % 2 == 0)
+			assert_int_equal(val, i + 31);
+		else
+			assert_int_equal(val, i + 1);
+
+		lookup_single(dkey2, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &req);
+		if (i % 2 == 0)
+			assert_int_equal(val, i + 31);
+		else
+			assert_int_equal(val, i + 1);
+	}
+
+	reintegrate_single_pool_rank(arg, kill_rank);
+	dtx_fini_req_akey(&req, akeys, 1, DTX_NC_CNT);
+}
+
 static const struct CMUnitTest dtx_tests[] = {
-	{"DTX1: DTX with multiple SV updates against the same obj",
+	{"DTX1: multiple SV update against the same obj",
 	 dtx_1, NULL, test_case_teardown},
-	{"DTX2: DTX with multiple EV updates against the same obj",
+	{"DTX2: multiple EV update against the same obj",
 	 dtx_2, NULL, test_case_teardown},
-	{"DTX3: Multiple small SV updates against multiple objs",
+	{"DTX3: Multiple small SV update against multiple objs",
 	 dtx_3, NULL, test_case_teardown},
-	{"DTX4: Multiple large EV updates against multiple objs",
+	{"DTX4: Multiple large EV update against multiple objs",
 	 dtx_4, NULL, test_case_teardown},
-	{"DTX5: Multiple small SV updates against multiple EC objs",
+	{"DTX5: Multiple small SV update on multiple EC objs",
 	 dtx_5, NULL, test_case_teardown},
-	{"DTX6: Multiple large EV updates against multiple EC objs",
+	{"DTX6: Multiple large EV update on multiple EC objs",
 	 dtx_6, NULL, test_case_teardown},
-	{"DTX7: DTX with SV update plus punch",
+	{"DTX7: SV update plus punch",
 	 dtx_7, NULL, test_case_teardown},
-	{"DTX8: DTX with EV update plus punch",
+	{"DTX8: EV update plus punch",
 	 dtx_8, NULL, test_case_teardown},
-	{"DTX9: DTX with conditional insert/update",
+	{"DTX9: conditional insert/update",
 	 dtx_9, NULL, test_case_teardown},
-	{"DTX10: DTX with conditional punch",
+	{"DTX10: conditional punch",
 	 dtx_10, NULL, test_case_teardown},
 	{"DTX11: read only transaction",
 	 dtx_11, NULL, test_case_teardown},
-	{"DTX12: DTX with zero copy flag",
+	{"DTX12: zero copy flag",
 	 dtx_12, NULL, test_case_teardown},
 	{"DTX13: DTX status machnie",
 	 dtx_13, NULL, test_case_teardown},
-	{"DTX14: DTX restart because of conflict with others",
+	{"DTX14: restart because of conflict with others",
 	 dtx_14, NULL, test_case_teardown},
-	{"DTX15: DTX restart because of stale pool map",
+	{"DTX15: restart because of stale pool map",
 	 dtx_15, NULL, test_case_teardown},
-	{"DTX16: Resend commit because of lost CPD request",
+	{"DTX16: resend commit because of lost CPD request",
 	 dtx_16, NULL, test_case_teardown},
-	{"DTX17: Resend commit because of lost CPD reply",
+	{"DTX17: resend commit because of lost CPD reply",
 	 dtx_17, NULL, test_case_teardown},
-	{"DTX18: Spread read time-stamp when commit",
+	{"DTX18: spread read time-stamp when commit",
 	 dtx_18, NULL, test_case_teardown},
-	{"DTX19: Misc rep and kinds of EC object updates in same TX",
+	{"DTX19: Misc rep and EC object update in same TX",
 	 dtx_19, NULL, test_case_teardown},
+
+	{"DTX20: atomicity - either all done or none done",
+	 dtx_20, NULL, test_case_teardown},
+	{"DTX21: atomicity - internal transaction",
+	 dtx_21, NULL, test_case_teardown},
+	{"DTX22: TX isolation - invisible partial modification",
+	 dtx_22, NULL, test_case_teardown},
+	{"DTX23: server start epoch - refuse TX with old epoch",
+	 dtx_23, NULL, test_case_teardown},
+	{"DTX24: async batched commit",
+	 dtx_24, NULL, test_case_teardown},
+
+	{"DTX25: uncertainty check - committable",
+	 dtx_25, NULL, test_case_teardown},
+	{"DTX26: uncertainty check - non-committable",
+	 dtx_26, NULL, test_case_teardown},
+	{"DTX27: uncertainty check - miss commit",
+	 dtx_27, NULL, test_case_teardown},
+	{"DTX28: uncertainty check - miss abort",
+	 dtx_28, NULL, test_case_teardown},
+
+	{"DTX29: uncertainty check - fetch re-entry",
+	 dtx_29, NULL, test_case_teardown},
+	{"DTX30: uncertainty check - enumeration re-entry",
+	 dtx_30, NULL, test_case_teardown},
+	{"DTX31: uncertainty check - update re-entry",
+	 dtx_31, NULL, test_case_teardown},
+	{"DTX32: uncertainty check - punch re-entry",
+	 dtx_32, NULL, test_case_teardown},
+	{"DTX33: uncertainty check - query key re-entry",
+	 dtx_33, NULL, test_case_teardown},
+	{"DTX34: uncertainty check - CPD RPC handler re-entry",
+	 dtx_34, NULL, test_case_teardown},
+
+	{"DTX35: resync during reopen container",
+	 dtx_35, NULL, test_case_teardown},
+	{"DTX36: resync - DTX entry for read only ops",
+	 dtx_36, NULL, test_case_teardown},
+	{"DTX37: resync - lost whole redundancy groups",
+	 dtx_37, NULL, test_case_teardown},
+	{"DTX38: resync - leader failed during prepare",
+	 dtx_38, NULL, test_case_teardown},
 };
 
 static int

@@ -145,6 +145,7 @@ typedef struct {
 	uint64_t		fail_num;
 	uint64_t		fail_value;
 	bool			overlap;
+	bool			not_check_result;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;

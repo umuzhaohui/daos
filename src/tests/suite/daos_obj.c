@@ -445,11 +445,12 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	int rc;
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, th, 0, dkey, nr, iods, sgls,
+	rc = daos_obj_fetch(req->oh, th, empty ? DAOS_COND_DKEY_FETCH : 0,
+			    dkey, nr, iods, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
 		req->result = rc;
-		if (rc != -DER_INPROGRESS)
+		if (rc != -DER_INPROGRESS && !req->arg->not_check_result)
 			assert_int_equal(rc, req->arg->expect_result);
 		return;
 	}
@@ -459,7 +460,7 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	assert_int_equal(rc, 0);
 	assert_int_equal(ev_flag, true);
 	req->result = req->ev.ev_error;
-	if (req->ev.ev_error != -DER_INPROGRESS)
+	if (req->ev.ev_error != -DER_INPROGRESS && !req->arg->not_check_result)
 		assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
