@@ -1099,6 +1099,9 @@ ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
 
 	D_ASSERT(minor_eph != 0);
 
+	if (vos_detect_dtx_uncertainty())
+		return -DER_TX_UNCERTAINTY;
+
 	if (punch) {
 		id.id_punch_minor_eph = minor_eph;
 		id.id_update_minor_eph = 0;

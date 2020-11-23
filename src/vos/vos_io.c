@@ -634,9 +634,6 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 	struct dcs_csum_info *csums = ioc->ic_biov_csums;
 	uint32_t	 dcb_nr = ioc->ic_biov_csums_nr;
 
-	if (ioc->ic_size_fetch)
-		return 0;
-
 	if (ioc->ic_biov_csums_at == dcb_nr - 1) {
 		struct dcs_csum_info *new_infos;
 		uint32_t	 new_nr = dcb_nr * 2;
@@ -706,6 +703,9 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
 			  &riov);
+	if (vos_detect_dtx_uncertainty())
+		D_GOTO(out, rc = (rc == 0 ? -DER_TX_UNCERTAINTY : rc));
+
 	if (rc == -DER_NONEXIST) {
 		rbund.rb_rsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
@@ -825,8 +825,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	evt_ent_array_init(&ent_array);
 	rc = evt_find(toh, &filter, &ent_array);
-	if (rc != 0)
-		goto failed;
+	if (rc != 0 || vos_detect_dtx_uncertainty())
+		D_GOTO(failed, rc = (rc == 0 ? -DER_TX_UNCERTAINTY : rc));
 
 	holes = 0;
 	rsize = 0;
@@ -1023,6 +1023,9 @@ stop_check(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod, int *rc,
 	if (*rc != -DER_NONEXIST)
 		return true;
 
+	if (vos_detect_dtx_uncertainty())
+		return true;
+
 	if (ioc->ic_check_existence)
 		goto check;
 
@@ -1068,6 +1071,7 @@ has_uncertainty(const struct vos_io_context *ioc,
 static int
 akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	struct vos_krec_df	*krec = NULL;
 	daos_epoch_range_t	 val_epr = {0};
@@ -1143,12 +1147,23 @@ fetch_value:
 					    &shadow_ep);
 			rc = akey_fetch_recx(toh, &val_epr, &fetch_recx,
 					     shadow_ep, &rsize, ioc);
+
+			if (rc == -DER_TX_UNCERTAINTY &&
+			    dth->dth_share_tbd_count < DTX_UNCERTAINTY_MAX)
+				/* Continue to detect other potential DTX
+				 * uncertainty without reading real data.
+				 */
+				continue;
+
 			if (rc != 0) {
-				D_DEBUG(DB_IO, "Failed to fetch index %d: "
-					DF_RC"\n", i, DP_RC(rc));
+				VOS_TX_LOG_FAIL(rc, "Failed to fetch index %d: "
+						DF_RC"\n", i, DP_RC(rc));
 				goto out;
 			}
 		}
+
+		if (vos_detect_dtx_uncertainty())
+			continue;
 
 		/*
 		 * Empty tree or all holes, DAOS array API relies on zero
@@ -1168,12 +1183,15 @@ fetch_value:
 		}
 	}
 
+	if (vos_detect_dtx_uncertainty())
+		goto out;
+
 	ioc_trim_tail_holes(ioc);
 out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, is_array);
 
-	return rc;
+	return vos_detect_dtx_uncertainty() ? -DER_TX_UNCERTAINTY : rc;
 }
 
 static void
@@ -1189,6 +1207,7 @@ iod_set_cursor(struct vos_io_context *ioc, unsigned int sgl_at)
 static int
 dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
@@ -1239,14 +1258,26 @@ fetch_akey:
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
 		rc = akey_fetch(ioc, toh);
+		if (rc == -DER_TX_UNCERTAINTY &&
+		    dth->dth_share_tbd_count < DTX_UNCERTAINTY_MAX)
+			/* Continue to detect other potential DTX
+			 * uncertainty without reading real data.
+			 */
+			continue;
+
 		if (rc != 0)
 			break;
 	}
+
+	/* Add this check to prevent some new added logic after above for(). */
+	if (vos_detect_dtx_uncertainty())
+		goto out;
+
 out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, false);
 
-	return rc;
+	return vos_detect_dtx_uncertainty() ? -DER_TX_UNCERTAINTY : rc;
 }
 
 int
@@ -1379,6 +1410,9 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	daos_epoch_t		 epoch = ioc->ic_epr.epr_hi;
 	int			 rc;
 
+	if (vos_detect_dtx_uncertainty())
+		return -DER_TX_UNCERTAINTY;
+
 	ci_set_null(&csum);
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch		= epoch;
@@ -1461,6 +1495,7 @@ static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	    uint16_t minor_epc)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
@@ -1551,20 +1586,33 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
+		if (rc == -DER_TX_UNCERTAINTY &&
+		    dth->dth_share_tbd_count < DTX_UNCERTAINTY_MAX)
+			/* Continue to detect other potential DTX
+			 * uncertainty without writing real data.
+			 */
+			continue;
+
 		if (rc != 0)
 			goto out;
 	}
+
+	/* Add this check to prevent some new added logic after above for(). */
+	if (vos_detect_dtx_uncertainty())
+		goto out;
+
 out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, is_array);
 
-	return rc;
+	return vos_detect_dtx_uncertainty() ? -DER_TX_UNCERTAINTY : rc;
 }
 
 static int
 dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 	    uint16_t minor_epc)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_object	*obj = ioc->ic_obj;
 	daos_handle_t		 ak_toh;
 	struct vos_krec_df	*krec;
@@ -1613,9 +1661,21 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 		iod_set_cursor(ioc, i);
 
 		rc = akey_update(ioc, pm_ver, ak_toh, minor_epc);
+		if (rc == -DER_TX_UNCERTAINTY &&
+		    dth->dth_share_tbd_count < DTX_UNCERTAINTY_MAX)
+			/* Continue to detect other potential DTX
+			 * uncertainty without writing real data.
+			 */
+			continue;
+
 		if (rc != 0)
 			goto out;
 	}
+
+	/* Add this check to prevent some new added logic after above for(). */
+	if (vos_detect_dtx_uncertainty())
+		goto out;
+
 out:
 	if (!subtr_created)
 		return rc;
@@ -1626,7 +1686,7 @@ out:
 release:
 	key_tree_release(ak_toh, false);
 
-	return rc;
+	return vos_detect_dtx_uncertainty() ? -DER_TX_UNCERTAINTY : rc;
 }
 
 daos_size_t

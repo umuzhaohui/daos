@@ -869,7 +869,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 
 		start_shard = rounddown(mrone->mo_oid.id_shard,
 					obj_ec_tgt_nr(oca));
-		if (obj_ec_singv_one_tgt(iod, &sgls[i], oca)) {
+		if (obj_ec_singv_one_tgt(iod->iod_size, &sgls[i], oca)) {
 			D_DEBUG(DB_REBUILD, DF_UOID" one tgt.\n",
 				DP_UOID(mrone->mo_oid));
 			continue;

@@ -145,7 +145,8 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 		iod = &iods[i];
 		sgl = &sgls[i];
 		D_ASSERT(iod->iod_size != DAOS_REC_ANY);
-		if (obj_ec_singv_one_tgt(iod, sgl, reasb_req->orr_oca)) {
+		if (obj_ec_singv_one_tgt(iod->iod_size, sgl,
+					 reasb_req->orr_oca)) {
 			singv_lo->cs_even_dist = 0;
 			continue;
 		}

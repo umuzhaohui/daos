@@ -659,6 +659,16 @@ probe:
 	while (1) {
 		rc = vos_iter_fetch(ih, &iter_ent, anchor);
 		if (rc != 0) {
+			if (rc == -DER_TX_UNCERTAINTY &&
+			    dth->dth_share_tbd_count < DTX_UNCERTAINTY_MAX) {
+				pre_cb = NULL;
+				post_cb = NULL;
+				/* Continue to detect other potential
+				 * DTX uncertainty.
+				 */
+				goto next;
+			}
+
 			VOS_TX_TRACE_FAIL(rc, "Failed to fetch iterator "
 					  "(type=%d): "DF_RC"\n", type,
 					  DP_RC(rc));
@@ -708,8 +718,19 @@ probe:
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
 					 recursive, anchors, pre_cb, post_cb,
 					 arg, dth);
-			if (rc != 0)
-				D_GOTO(out, rc);
+			if (rc != 0) {
+				if (rc == -DER_TX_UNCERTAINTY &&
+				    dth->dth_share_tbd_count <
+				    DTX_UNCERTAINTY_MAX) {
+					/* Continue to detect other potential
+					 * DTX uncertainty.
+					 */
+					pre_cb = NULL;
+					post_cb = NULL;
+				} else {
+					D_GOTO(out, rc);
+				}
+			}
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
 		}
@@ -724,12 +745,14 @@ probe:
 
 		}
 
-		if (need_reprobe(type, anchors)) {
+		if (need_reprobe(type, anchors) &&
+		    !vos_detect_dtx_uncertainty()) {
 			D_ASSERT(!daos_anchor_is_zero(anchor) &&
 				 !daos_anchor_is_eof(anchor));
 			goto probe;
 		}
 
+next:
 		rc = vos_iter_next(ih);
 		if (rc) {
 			VOS_TX_TRACE_FAIL(rc,
@@ -739,11 +762,17 @@ probe:
 		}
 	}
 
+	if (vos_detect_dtx_uncertainty())
+		goto out;
+
 	if (rc == -DER_NONEXIST) {
 		daos_anchor_set_eof(anchor);
 		rc = 0;
 	}
 out:
+	if (vos_detect_dtx_uncertainty())
+		rc = DER_TX_UNCERTAINTY;
+
 	if (rc >= 0)
 		rc = vos_iter_ts_set_update(ih, read_time, rc);
 

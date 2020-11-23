@@ -2022,6 +2022,9 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	if (rc != 0)
 		return rc;
 
+	if (vos_detect_dtx_uncertainty())
+		return -DER_TX_UNCERTAINTY;
+
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
@@ -3266,7 +3269,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 {
 	struct evt_context	*tcx;
 	struct evt_entry	*entry;
-	struct evt_entry_array	 ent_array;
+	struct evt_entry_array	 ent_array = { 0 };
 	struct evt_filter	 filter = {0};
 	int			 rc;
 	struct evt_rect		 rect;
@@ -3288,12 +3291,14 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 				&filter, &rect, &ent_array);
 	if (rc != 0) {
 		D_ERROR("ent_array_fill failed: "DF_RC"\n", DP_RC(rc));
-		evt_ent_array_fini(&ent_array);
-		return rc;
+		goto done;
 	}
 
+	if (vos_detect_dtx_uncertainty())
+		D_GOTO(done, rc = -DER_TX_UNCERTAINTY);
+
 	if (ent_array.ea_ent_nr == 0)
-		return 0;
+		D_GOTO(done, rc = 0);
 
 	evt_ent_array_for_each(entry, &ent_array) {
 		if (entry->en_visibility & EVT_PARTIAL) {
@@ -3307,7 +3312,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
-		return rc;
+		goto done;
 
 	evt_ent_array_for_each(entry, &ent_array) {
 		struct evt_rect	to_delete;

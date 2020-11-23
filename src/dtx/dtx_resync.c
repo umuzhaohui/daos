@@ -91,10 +91,11 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * DTXs. So double check the status before current commit.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
-		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
+		    rc == -DER_NONEXIST)
 			goto next;
 
 		/* If we failed to check the status, then assume that it is
@@ -134,7 +135,9 @@ dtx_target_alive(struct ds_pool *pool, uint32_t id)
 	struct pool_target	*target;
 	int			 rc;
 
+	ABT_rwlock_wrlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, id, &target);
+	ABT_rwlock_unlock(pool->sp_lock);
 	D_ASSERT(rc == 1);
 
 	return target->ta_comp.co_status == PO_COMP_ST_UPIN ? true : false;
@@ -228,7 +231,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	if (drh->drh_count == 0)
 		goto out;
 
+	ABT_rwlock_wrlock(pool->sp_lock);
 	tgt_cnt = pool_map_target_nr(pool->sp_map);
+	ABT_rwlock_unlock(pool->sp_lock);
 	D_ASSERT(tgt_cnt != 0);
 
 	D_ALLOC_ARRAY(tgt_array, tgt_cnt);
@@ -257,7 +262,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		/* The DTX has been committed on some remote replica(s),
 		 * let's commit the DTX globally.
 		 */
-		if (rc == DTX_ST_COMMITTED)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			goto commit;
 
 		if (rc == DTX_ST_PREPARED) {
@@ -273,14 +278,10 @@ dtx_status_handle(struct dtx_resync_args *dra)
 				 *	make decision whether commit or abort
 				 *	the DTX. we need more human knowledge
 				 *	to manually recover related things.
-				 *
-				 *	One possible TBD is that we can mark
-				 *	the DTX as 'failed' on related servers,
-				 *	that will fail subsequent accessing of
-				 *	related data directly without talk with
-				 *	the leader again.
 				 */
 
+				vos_dtx_mark_corrupted(cont->sc_hdl,
+						       &dre->dre_xid);
 				dtx_dre_release(drh, dre);
 				continue;
 			}
@@ -301,16 +302,17 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		 * DTXs. So double check the status before next action.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 
 		/* Skip this DTX that it may has been committed or aborted. */
-		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST) {
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
+		    rc == -DER_NONEXIST) {
 			dtx_dre_release(drh, dre);
 			continue;
 		}
 
 		/* Skip this DTX if failed to get the status. */
-		if (rc != DTX_ST_PREPARED) {
+		if (rc != DTX_ST_PREPARED && rc != DTX_ST_CORRUPTED) {
 			D_WARN("Not sure about whether the DTX "DF_DTI
 			       " can be abort or not: %d, skip it.\n",
 			       DP_DTI(&dre->dre_xid), rc);
@@ -382,7 +384,12 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
 
-	if (ent->ie_dtx_flags & DTE_LEADER && !dra->resync_all)
+	/* Some DTX may be marked as 'corrputed' during last cycle DTX
+	 * resync, but related lost partipants may recovered now, let's
+	 * resync such DTX again.
+	 */
+	if (ent->ie_dtx_flags & DTE_LEADER && !dra->resync_all &&
+	    !(ent->ie_dtx_flags & DTE_CORRUPTED))
 		return 0;
 
 	/* Only handle the DTX that happened before the DTX resync. */

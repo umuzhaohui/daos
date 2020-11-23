@@ -55,6 +55,7 @@
 		case -DER_INPROGRESS:			\
 		case -DER_EXIST:			\
 		case -DER_NONEXIST:			\
+		case -DER_TX_UNCERTAINTY:		\
 			__is_err = false;		\
 			break;				\
 		}					\
@@ -73,6 +74,7 @@
 		case -DER_INPROGRESS:			\
 		case -DER_EXIST:			\
 		case -DER_NONEXIST:			\
+		case -DER_TX_UNCERTAINTY:		\
 			__is_err = false;		\
 			break;				\
 		}					\
@@ -1194,5 +1196,12 @@ vos_has_uncertainty(struct vos_ts_set *ts_set,
 	return vos_ts_wcheck(ts_set, epoch, bound);
 }
 
+static inline bool
+vos_detect_dtx_uncertainty(void)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	return dth != NULL && dth->dth_share_tbd_count > 0;
+}
 
 #endif /* __VOS_INTERNAL_H__ */

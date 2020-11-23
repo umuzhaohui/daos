@@ -38,7 +38,12 @@ struct dtx_rsrvd_uint {
 };
 
 enum dtx_cos_flags {
-	DCF_SHARED	= (1 << 0),
+	DCF_SHARED		= (1 << 0),
+	/* Some DTX (such as for the distributed transaction across multiple
+	 * RDGs, or for EC object modification) need to be committed via DTX
+	 * RPC instead of piggyback via other dispatched update/punch RPC.
+	 */
+	DCF_EXP_CMT		= (1 << 1),
 };
 
 struct dtx_cos_key {
@@ -58,6 +63,8 @@ enum dtx_entry_flags {
 	 * object modification via standalone update/punch.
 	 */
 	DTE_BLOCK		= (1 << 2),
+	/* The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTE_CORRUPTED		= (1 << 3),
 };
 
 struct dtx_entry {
