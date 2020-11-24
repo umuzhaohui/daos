@@ -106,5 +106,5 @@ post_provision_config_nodes() {
     fi
 
     # now make sure everything is fully up-to-date
-    time dnf -y upgrade --exclude fuse,mercury,daos,daos-\*
+    time dnf -y upgrade --exclude fuse,fuse-libs,mercury,daos,daos-\*
 }
