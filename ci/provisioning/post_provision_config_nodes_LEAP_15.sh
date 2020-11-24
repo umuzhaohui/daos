@@ -5,9 +5,11 @@ url_to_repo() {
 
     local repo=${URL#*://}
     repo="${repo//%252F/_}"
+    repo="${repo//\//_}"
 
     echo "$repo"
 }
+
 post_provision_config_nodes() {
     time zypper --non-interactive install dnf
 
