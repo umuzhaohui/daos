@@ -20,7 +20,7 @@ post_provision_config_nodes() {
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
          yum-config-manager \
-             --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO"
+             --add-repo="$REPOSITORY_URL$DAOS_STACK_GROUP_REPO"
     fi
 
     if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then

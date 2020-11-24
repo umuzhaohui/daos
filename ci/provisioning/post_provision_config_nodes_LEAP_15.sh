@@ -1,5 +1,13 @@
 #!/bin/bash
 
+url_to_repo() {
+    local URL="$1"
+
+    local repo=${URL#*://}
+    repo="${repo//%252F/_}"
+
+    echo "$repo"
+}
 post_provision_config_nodes() {
     time zypper --non-interactive install dnf
 
@@ -29,8 +37,7 @@ post_provision_config_nodes() {
         rm -f /etc/dnf.repos.d/*"$DAOS_STACK_LOCAL_REPO"
         local repo="$REPOSITORY_URL$DAOS_STACK_LOCAL_REPO"
         dnf config-manager --add-repo="${repo}"
-        repo=${repo#*://}
-        dnf config-manager --save --setopt=*"${repo//\//_}".gpgcheck=0
+        dnf config-manager --save --setopt=*"$(url_to_repo "$repo")".gpgcheck=0
     fi
 
     if [ -n "$INST_REPOS" ]; then
@@ -46,10 +53,8 @@ post_provision_config_nodes() {
                 fi
             fi
             local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
-            dnf config-manager --add-repo="$repo"
-            repo=${repo#*://}
-            repo="${repo//%252F/_}"
-            dnf config-manager --save --setopt=*"${repo}".gpgcheck=0
+            dnf config-manager --add-repo="${repo}"
+            dnf config-manager --save --setopt=*"$(url_to_repo "$repo")".gpgcheck=0
         done
     fi
     if [ -n "$INST_RPMS" ]; then
@@ -61,15 +66,13 @@ post_provision_config_nodes() {
     done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    dnf -y install redhat-lsb-core
+    dnf -y install lsb-release
 
     # monkey-patch lua-lmod
     if ! grep MODULEPATH=".*"/usr/share/modules /etc/profile.d/lmod.sh; then \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
                /etc/profile.d/lmod.sh;                                        \
     fi
-
-    zypper --non-interactive in lsb-release
 
     # force install of avocado 52.1
     dnf -y erase avocado{,-common} python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
