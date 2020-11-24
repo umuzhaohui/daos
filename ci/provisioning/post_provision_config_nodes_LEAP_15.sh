@@ -10,12 +10,14 @@ url_to_repo() {
     echo "$repo"
 }
 
+disable_gpg_check() {
+    local REPO="$1"
+
+    dnf config-manager --save --setopt="$(url_to_repo "$REPO")".gpgcheck=0
+}
+
 post_provision_config_nodes() {
     time zypper --non-interactive install dnf
-
-    local dnf_repo_args="--disablerepo=*"
-    dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
-    dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
 
     # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
@@ -29,6 +31,9 @@ post_provision_config_nodes() {
                      libpmemblk munge-libs munge slurm             \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
+
+    local dnf_repo_args="--disablerepo=*"
+
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          rm -f /etc/dnf.repos.d/*"$DAOS_STACK_GROUP_REPO"
          dnf config-manager \
@@ -39,8 +44,11 @@ post_provision_config_nodes() {
         rm -f /etc/dnf.repos.d/*"$DAOS_STACK_LOCAL_REPO"
         local repo="$REPOSITORY_URL$DAOS_STACK_LOCAL_REPO"
         dnf config-manager --add-repo="${repo}"
-        dnf config-manager --save --setopt=*"$(url_to_repo "$repo")".gpgcheck=0
+        disable_gpg_check "$repo"
     fi
+
+    # TODO: this should be per repo for the above two repos
+    dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
 
     if [ -n "$INST_REPOS" ]; then
         for repo in $INST_REPOS; do
@@ -56,16 +64,17 @@ post_provision_config_nodes() {
             fi
             local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
             dnf config-manager --add-repo="${repo}"
-            dnf config-manager --save --setopt=*"$(url_to_repo "$repo")".gpgcheck=0
+            disable_gpg_check "$repo"
+            # TODO: this should be per repo in the above loop
+            if [ -n "$INST_REPOS" ]; then
+                dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
+            fi
         done
     fi
     if [ -n "$INST_RPMS" ]; then
         # shellcheck disable=SC2086
         dnf -y erase $INST_RPMS
     fi
-    for gpg_url in $GPG_KEY_URLS; do
-      rpm --import "$gpg_url"
-    done
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     dnf -y install lsb-release
