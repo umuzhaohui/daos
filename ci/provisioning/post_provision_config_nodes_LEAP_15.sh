@@ -22,12 +22,12 @@ post_provision_config_nodes() {
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          rm -f /etc/dnf.repos.d/*"$DAOS_STACK_GROUP_REPO"
          dnf config-manager \
-             --add-repo="$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO"
+             --add-repo="$REPOSITORY_URL$DAOS_STACK_GROUP_REPO"
     fi
 
     if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
         rm -f /etc/dnf.repos.d/*"$DAOS_STACK_LOCAL_REPO"
-        local repo="$REPOSITORY_URL"/"$DAOS_STACK_LOCAL_REPO"
+        local repo="$REPOSITORY_URL$DAOS_STACK_LOCAL_REPO"
         dnf config-manager --add-repo="${repo}"
         repo=${repo#*://}
         dnf config-manager --save --setopt=*"${repo//\//_}".gpgcheck=0
