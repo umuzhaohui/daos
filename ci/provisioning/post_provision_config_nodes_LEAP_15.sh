@@ -67,7 +67,7 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/centos7/
+            local repo="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/leap15/
             dnf config-manager --add-repo="${repo}"
             disable_gpg_check "$repo"
             # TODO: this should be per repo in the above loop
